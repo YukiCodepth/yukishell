@@ -1,5 +1,7 @@
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
+#include <sys/wait.h>
 
 int main() {
 
@@ -13,25 +15,29 @@ int main() {
 
         command[strcspn(command, "\n")] = 0;
 
-        if(strcmp(command, "hello") == 0) {
-            printf("Hello Yuki!\n");
-        }
-
-        else if(strcmp(command, "help") == 0) {
-            printf("Available commands:\n");
-            printf("hello\n");
-            printf("help\n");
-            printf("exit\n");
-        }
-
-        else if(strcmp(command, "exit") == 0) {
+        if(strcmp(command, "exit") == 0) {
             printf("Closing YukiShell...\n");
             break;
         }
 
-        else {
-            printf("Command not found\n");
+        pid_t pid = fork();
+
+        if(pid == 0) {
+
+            char *args[] = {command, NULL};
+
+            execvp(args[0], args);
+
+            printf("Command failed\n");
+
         }
+
+        else {
+
+            wait(NULL);
+
+        }
+
     }
 
     return 0;
