@@ -1,9 +1,14 @@
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
+#include <sys/wait.h>
+
+#define MAX_ARGS 10
 
 int main() {
 
     char command[100];
+    char *args[MAX_ARGS];
 
     while(1) {
 
@@ -13,24 +18,50 @@ int main() {
 
         command[strcspn(command, "\n")] = 0;
 
-        if(strcmp(command, "hello") == 0) {
-            printf("Hello Yuki!\n");
+        if(strlen(command) == 0)
+            continue;
+
+        int i = 0;
+
+        args[i] = strtok(command, " ");
+
+        while(args[i] != NULL && i < MAX_ARGS-1) {
+            i++;
+            args[i] = strtok(NULL, " ");
         }
 
-        else if(strcmp(command, "help") == 0) {
-            printf("Available commands:\n");
-            printf("hello\n");
-            printf("help\n");
-            printf("exit\n");
-        }
+        /* BUILT-IN COMMANDS */
 
-        else if(strcmp(command, "exit") == 0) {
+        if(strcmp(args[0], "exit") == 0) {
             printf("Closing YukiShell...\n");
             break;
         }
 
+        if(strcmp(args[0], "help") == 0) {
+            printf("Available commands:\n");
+            printf("help\n");
+            printf("exit\n");
+            printf("ls\n");
+            printf("pwd\n");
+            printf("whoami\n");
+            continue;
+        }
+
+        /* CREATE CHILD PROCESS */
+
+        pid_t pid = fork();
+
+        if(pid == 0) {
+
+            execvp(args[0], args);
+
+            perror("Command failed");
+
+        }
         else {
-            printf("Command not found\n");
+
+            wait(NULL);
+
         }
     }
 
