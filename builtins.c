@@ -1,26 +1,49 @@
 #include "yukishell.h"
 
-// Returns 1 if a built-in command was found and executed, 0 if not.
 int execute_builtin(char **args) {
     if (args[0] == NULL) {
-        return 1; // Empty command, just return to prompt
+        return 1; 
     }
 
     if(strcmp(args[0], "exit") == 0) {
         printf("Closing YukiShell...\n");
-        exit(0); // Actually exit the program here
+        exit(0); 
     }
 
     if(strcmp(args[0], "help") == 0) {
-        printf("Available commands:\n");
-        printf("  help\n");
-        printf("  exit\n");
-        printf("  cd <dir>\n");
-        printf("  ls\n");
-        printf("  pwd\n");
-        printf("  whoami\n");
-        printf("  ls | grep <pattern>\n");
-        printf("  ls > file.txt\n");
+        printf("\n======================================================\n");
+        printf("                 YukiShell Help Menu                  \n");
+        printf("======================================================\n");
+        
+        printf("[ Built-in Commands ]\n");
+        printf("  help       : Displays this formatted help menu.\n");
+        printf("  exit       : Safely terminates the shell.\n");
+        printf("  cd <dir>   : Changes the current working directory.\n");
+        printf("               (Example: cd Documents)\n\n");
+
+        printf("[ Standard System Commands ]\n");
+        printf("  YukiShell natively supports standard Linux commands\n");
+        printf("  like: ls, pwd, whoami, cat, echo, mkdir, rm, etc.\n\n");
+
+        printf("[ User Experience (UX) ]\n");
+        printf("  Arrow Keys : Press UP or DOWN to cycle through your\n");
+        printf("               command history.\n");
+        printf("  TAB Key    : Press TAB to auto-complete file and\n");
+        printf("               folder names as you type.\n\n");
+
+        printf("[ Advanced Shell Features ]\n");
+        printf("  Pipes (|)         : Passes the output of one command\n");
+        printf("                      directly as input to the next.\n");
+        printf("                      Example: ls -l | grep \"txt\"\n\n");
+        
+        printf("  Redirection (>)   : Saves the output of a command\n");
+        printf("                      into a text file instead of the screen.\n");
+        printf("                      Example: ls > directory_list.txt\n\n");
+        
+        printf("  Background (&)    : Runs a heavy or long task in the\n");
+        printf("                      background so you can keep typing.\n");
+        printf("                      Example: sleep 10 &\n");
+        printf("======================================================\n\n");
         return 1;
     }
 
@@ -35,5 +58,5 @@ int execute_builtin(char **args) {
         return 1;
     }
 
-    return 0; // Not a built-in command
+    return 0; 
 }

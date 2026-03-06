@@ -7,16 +7,19 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <fcntl.h>
+#include <signal.h> 
+#include <readline/readline.h> // Added for input and tab autocomplete
+#include <readline/history.h>  // Added for up/down arrow history
 
 #define MAX_ARGS 10
 #define MAX_CMD_LEN 100
 
 // --- Function Prototypes ---
-void parse_command(char *command, char **args);
+void parse_command(char *command, char **args, int *background);
 int check_for_pipes(char **args, char **command2);
 int check_for_redirection(char **args, char **filename);
 int execute_builtin(char **args);
-int execute_external(char **args);
+int execute_external(char **args, int background);
 int execute_piped(char **args, char **command2);
 int execute_redirected(char **args, char *filename);
 

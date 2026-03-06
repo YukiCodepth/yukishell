@@ -1,49 +1,60 @@
 #include "yukishell.h"
 
+void sigchld_handler(int sig) {
+    while (waitpid(-1, NULL, WNOHANG) > 0);
+}
+
 int main() {
-    char command[MAX_CMD_LEN];
+    char *command; // Changed from array to pointer for readline
     char *args[MAX_ARGS];
     char *command2[MAX_ARGS];
     char *filename = NULL;
+    int background = 0; 
+
+    signal(SIGCHLD, sigchld_handler);
 
     while(1) {
-        printf("YukiShell > ");
+        // readline automatically prints the prompt and handles arrows/tabs!
+        command = readline("YukiShell > ");
         
         // Handle EOF (Ctrl+D) gracefully
-        if (fgets(command, sizeof(command), stdin) == NULL) {
+        if (command == NULL) {
             printf("\nClosing YukiShell...\n");
             break;
         }
         
-        command[strcspn(command, "\n")] = 0;  // Remove newline character
-
-        if(strlen(command) == 0) 
+        // If the user typed something, add it to the Up/Down arrow history
+        if(strlen(command) > 0) {
+            add_history(command);
+        } else {
+            free(command); // Clean up memory if they just hit Enter
             continue;
-
-        // 1. Parse the raw input into arguments (Handled by parser.c)
-        parse_command(command, args);
-
-        // 2. Check if it's a built-in command like 'cd' or 'exit' (Handled by builtins.c)
-        if (execute_builtin(args) == 1) {
-            continue; // Built-in handled it successfully, loop back to prompt
         }
 
-        // 3. Check for pipes '|' (Handled by parser.c & executor.c)
+        parse_command(command, args, &background);
+
+        if (execute_builtin(args) == 1) {
+            free(command); 
+            continue; 
+        }
+
         if (check_for_pipes(args, command2) == 1) {
             execute_piped(args, command2);
+            free(command);
             continue;
         }
 
-        // 4. Check for redirection '>' (Handled by parser.c & executor.c)
         if (check_for_redirection(args, &filename) == 1) {
-            if (args[0] != NULL) { // Ensure no syntax error occurred
+            if (args[0] != NULL) { 
                 execute_redirected(args, filename);
             }
+            free(command);
             continue;
         }
 
-        // 5. If no pipes or redirection, run a normal external command
-        execute_external(args);
+        execute_external(args, background);
+        
+        free(command); // Always free the memory readline gave us at the end of the loop
     }
 
     return 0;

@@ -1,14 +1,22 @@
 #include "yukishell.h"
 
-// Chops the raw string into an array of words
-void parse_command(char *command, char **args) {
+// Chops the raw string into an array of words and checks for '&'
+void parse_command(char *command, char **args, int *background) {
+    *background = 0; // Default to foreground
     int i = 0;
+    
     args[i] = strtok(command, " ");
     while(args[i] != NULL && i < MAX_ARGS - 1) {
         i++;
         args[i] = strtok(NULL, " ");
     }
-    args[i] = NULL; // Ensure null termination for execvp
+    args[i] = NULL; 
+
+    // Check if the very last argument is '&'
+    if (i > 0 && strcmp(args[i-1], "&") == 0) {
+        *background = 1;      // Set the flag to true
+        args[i-1] = NULL;     // Remove the '&' from the command so execvp ignores it
+    }
 }
 
 // Scans for the pipe symbol and splits into two command arrays
@@ -16,7 +24,6 @@ int check_for_pipes(char **args, char **command2) {
     int pipeIndex = -1;
     int i = 0;
     
-    // Find the pipe symbol
     while (args[i] != NULL) {
         if (strcmp(args[i], "|") == 0) {
             pipeIndex = i;
@@ -34,9 +41,9 @@ int check_for_pipes(char **args, char **command2) {
             k++;
         }
         command2[k] = NULL; // Terminate the second command
-        return 1; // True: Pipe was found
+        return 1; 
     }
-    return 0; // False: No pipe
+    return 0; 
 }
 
 // Scans for the redirection symbol and isolates the filename
@@ -55,13 +62,13 @@ int check_for_redirection(char **args, char **filename) {
     if (redirIndex != -1) {
         if (args[redirIndex + 1] == NULL) {
             printf("Syntax error: expected filename after '>'\n");
-            args[0] = NULL; // Prevent execution on syntax error
+            args[0] = NULL; 
             return 1; 
         }
 
-        *filename = args[redirIndex + 1]; // Save the filename
-        args[redirIndex] = NULL; // Cut off the args array at the '>'
-        return 1; // True: Redirection found
+        *filename = args[redirIndex + 1]; 
+        args[redirIndex] = NULL; 
+        return 1; 
     }
-    return 0; // False: No redirection
+    return 0; 
 }
