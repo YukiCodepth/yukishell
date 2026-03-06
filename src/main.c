@@ -1,4 +1,4 @@
-#include "yukishell.h"
+#include "../include/yukishell.h"
 
 void sigchld_handler(int sig) {
     while (waitpid(-1, NULL, WNOHANG) > 0);

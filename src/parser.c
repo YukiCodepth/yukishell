@@ -1,4 +1,4 @@
-#include "yukishell.h"
+#include "../include/yukishell.h"
 
 // Chops the raw string into an array of words and checks for '&'
 void parse_command(char *command, char **args, int *background) {
