@@ -1,5 +1,0 @@
-Documents
-file.txt
-README.md
-yukishell
-yukishell.c
