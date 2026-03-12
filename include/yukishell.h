@@ -7,14 +7,15 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #include <fcntl.h>
-#include <signal.h> 
-#include <readline/readline.h> // Added for input and tab autocomplete
-#include <readline/history.h>  // Added for up/down arrow history
+#include <signal.h>
+#include <termios.h>    // Hardware Serial Monitor
+#include <readline/readline.h>
+#include <readline/history.h>
 
 #define MAX_ARGS 10
 #define MAX_CMD_LEN 100
 
-// --- Function Prototypes ---
+// Function Prototypes
 void parse_command(char *command, char **args, int *background);
 int check_for_pipes(char **args, char **command2);
 int check_for_redirection(char **args, char **filename);
