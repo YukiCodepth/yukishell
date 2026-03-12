@@ -11,39 +11,32 @@ int execute_builtin(char **args) {
     }
 
     if(strcmp(args[0], "help") == 0) {
-        printf("\n======================================================\n");
-        printf("                 YukiShell Help Menu                  \n");
-        printf("======================================================\n");
+        printf("\n\x1b[36m\x1b[1m======================================================\x1b[0m\n");
+        printf("\x1b[1m                 YukiShell Help Menu                  \x1b[0m\n");
+        printf("\x1b[36m\x1b[1m======================================================\x1b[0m\n");
         
-        printf("[ Built-in Commands ]\n");
+        printf("\x1b[32m[ Core Commands ]\x1b[0m\n");
         printf("  help       : Displays this formatted help menu.\n");
-        printf("  exit       : Safely terminates the shell.\n");
-        printf("  cd <dir>   : Changes the current working directory.\n");
-        printf("               (Example: cd Documents)\n\n");
+        printf("  exit       : Safely terminates the shell process.\n");
+        printf("  cd <dir>   : Changes the current working directory.\n\n");
 
-        printf("[ Standard System Commands ]\n");
-        printf("  YukiShell natively supports standard Linux commands\n");
-        printf("  like: ls, pwd, whoami, cat, echo, mkdir, rm, etc.\n\n");
-
-        printf("[ User Experience (UX) ]\n");
-        printf("  Arrow Keys : Press UP or DOWN to cycle through your\n");
-        printf("               command history.\n");
-        printf("  TAB Key    : Press TAB to auto-complete file and\n");
-        printf("               folder names as you type.\n\n");
-
-        printf("[ Advanced Shell Features ]\n");
-        printf("  Pipes (|)         : Passes the output of one command\n");
-        printf("                      directly as input to the next.\n");
-        printf("                      Example: ls -l | grep \"txt\"\n\n");
+        printf("\x1b[32m[ Advanced Data Routing ]\x1b[0m\n");
+        printf("  Pipes (|)         : Chains commands (e.g., ls -l | grep txt)\n");
+        printf("  Redirection (>)   : Saves output to file (e.g., echo hi > a.txt)\n\n");
         
-        printf("  Redirection (>)   : Saves the output of a command\n");
-        printf("                      into a text file instead of the screen.\n");
-        printf("                      Example: ls > directory_list.txt\n\n");
+        printf("\x1b[32m[ Process Management ]\x1b[0m\n");
+        printf("  Background (&)    : Runs task silently (e.g., sleep 10 &)\n\n");
+
+        printf("\x1b[32m[ Syntax & Parsing ]\x1b[0m\n");
+        printf("  Quotes (\" \")      : Ignores special characters (&, |, >) inside text.\n");
+        printf("                      (Example: echo \"hello & world > test\")\n\n");
+
+        printf("\x1b[32m[ User Experience ]\x1b[0m\n");
+        printf("  Arrow Keys : Press UP/DOWN to cycle command history.\n");
+        printf("  TAB Key    : Press TAB to auto-complete files/folders.\n");
+        printf("  UI Prompt  : Dynamically tracks your current working dir.\n");
         
-        printf("  Background (&)    : Runs a heavy or long task in the\n");
-        printf("                      background so you can keep typing.\n");
-        printf("                      Example: sleep 10 &\n");
-        printf("======================================================\n\n");
+        printf("\x1b[36m\x1b[1m======================================================\x1b[0m\n\n");
         return 1;
     }
 

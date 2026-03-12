@@ -1,6 +1,5 @@
 #include "../include/yukishell.h"
 
-// 1. Normal Command Execution
 int execute_external(char **args, int background) {
     pid_t pid = fork();
     if(pid == 0) {
@@ -11,17 +10,14 @@ int execute_external(char **args, int background) {
         perror("Fork failed");
     } else {
         if (background == 0) {
-            // Foreground: Shell waits for the command to finish
             waitpid(pid, NULL, 0); 
         } else {
-            // Background: Shell prints PID and immediately returns to prompt
             printf("[Background Process Started] PID: %d\n", pid);
         }
     }
     return 1;
 }
 
-// 2. Execution with Pipes (|)
 int execute_piped(char **args, char **command2) {
     int pipefd[2];
     if (pipe(pipefd) == -1) {
@@ -59,7 +55,6 @@ int execute_piped(char **args, char **command2) {
     return 1;
 }
 
-// 3. Execution with Redirection (>)
 int execute_redirected(char **args, char *filename) {
     int fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644); 
     if (fd == -1) {
