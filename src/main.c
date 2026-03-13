@@ -1,4 +1,5 @@
 #include "../include/yukishell.h"
+#include "../include/logo.h"
 
 #define RL_CYAN    "\001\x1b[36m\002"
 #define RL_GREEN   "\001\x1b[32m\002"
@@ -19,9 +20,10 @@ void format_directory(char *cwd) {
     }
 }
 
+// Added neofetch to auto-complete list!
 char *command_generator(const char *text, int state) {
     static int list_index, len;
-    char *commands[] = {"help", "exit", "cd", "netscan", "serial", NULL};
+    char *commands[] = {"help", "exit", "cd", "netscan", "serial", "neofetch", "ask", NULL};
 
     if (!state) { list_index = 0; len = strlen(text); }
 
@@ -60,6 +62,10 @@ int main(int argc, char **argv) {
         }
     }
 
+    if (!script_file) {
+        print_boot_screen();
+    }
+
     while(1) {
         if (script_file) {
             char line[1024];
@@ -89,6 +95,7 @@ int main(int argc, char **argv) {
         parse_command(command, args, &background);
 
         if (execute_builtin(args) == 1) { free(command); continue; }
+        // The parser checks for pipes first. The chaining magic happens inside execute_piped!
         if (check_for_pipes(args, command2) == 1) { execute_piped(args, command2); free(command); continue; }
         if (check_for_redirection(args, &filename) == 1) {
             if (args[0] != NULL) execute_redirected(args, filename);

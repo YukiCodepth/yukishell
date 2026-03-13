@@ -5,7 +5,7 @@ int execute_external(char **args, int background) {
     if(pid == 0) {
         execvp(args[0], args);  
         perror("Command failed");
-        _exit(1); // THE FIX: Ruthless kernel termination
+        _exit(1); 
     } else if (pid < 0) {
         perror("Fork failed");
     } else {
@@ -29,7 +29,7 @@ int execute_piped(char **args, char **command2) {
         close(pipefd[1]);  
         execvp(args[0], args);  
         perror("Command 1 failed");
-        _exit(1); // THE FIX
+        _exit(1); 
     } 
     
     pid_t pid2 = fork();
@@ -37,9 +37,22 @@ int execute_piped(char **args, char **command2) {
         close(pipefd[1]);  
         dup2(pipefd[0], STDIN_FILENO);  
         close(pipefd[0]);  
+
+        // --- THE V11 ADVANCED PARSER CHAINING ---
+        // We check if the right side of the pipe ALSO has a redirection!
+        char *chained_file = NULL;
+        if (check_for_redirection(command2, &chained_file)) {
+            int fd_out = open(chained_file, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+            if (fd_out != -1) {
+                dup2(fd_out, STDOUT_FILENO);
+                close(fd_out);
+            }
+        }
+        // ----------------------------------------
+
         execvp(command2[0], command2);  
         perror("Command 2 failed");
-        _exit(1); // THE FIX
+        _exit(1); 
     }
     
     close(pipefd[0]); close(pipefd[1]);
@@ -57,7 +70,7 @@ int execute_redirected(char **args, char *filename) {
         close(fd);                
         execvp(args[0], args);  
         perror("Command failed");
-        _exit(1); // THE FIX
+        _exit(1); 
     } else if (pid < 0) {
         perror("Fork failed");
     } else {

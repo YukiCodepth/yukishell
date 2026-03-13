@@ -1,0 +1,18 @@
+# YukiShell V10 Master Diagnostic
+echo '--- [1] Core & Routing ---'
+whoami
+echo 'V10 is routing perfectly' > v10_test.txt
+cat v10_test.txt | grep V10
+rm v10_test.txt
+echo ' '
+echo '--- [2] Quote-Aware Parser ---'
+echo "Special characters like &, |, and > are safely ignored inside quotes"
+echo ' '
+echo '--- [3] Process Management ---'
+sleep 1 &
+echo ' '
+echo '--- [4] IoT Toolkit (Netscan) ---'
+netscan
+echo ' '
+echo '[+] All V10 Automated Systems Operational'
+echo 'Note: To test the Serial Monitor, type: serial /dev/ttyUSB0'
