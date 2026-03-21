@@ -1,11 +1,30 @@
 #include "../include/yukishell.h"
 #include "../include/logo.h"
+#include <readline/readline.h>
+#include <readline/history.h>
 
 #define RL_CYAN    "\001\x1b[36m\002"
 #define RL_GREEN   "\001\x1b[32m\002"
 #define RL_BLUE    "\001\x1b[34m\002"
 #define RL_RESET   "\001\x1b[0m\002"
 #define RL_BOLD    "\001\x1b[1m\002"
+
+// --- V12: Persistent History File ---
+#define HISTORY_FILE ".yuki_history"
+char global_history_path[1024]; 
+
+void get_history_path(char *path) {
+    char *home = getenv("HOME");
+    if (home) {
+        sprintf(path, "%s/%s", home, HISTORY_FILE);
+    } else {
+        strcpy(path, HISTORY_FILE);
+    }
+}
+
+void save_history_hook() {
+    write_history(global_history_path);
+}
 
 void sigchld_handler(int sig) {
     while (waitpid(-1, NULL, WNOHANG) > 0);
@@ -20,10 +39,10 @@ void format_directory(char *cwd) {
     }
 }
 
-// Added neofetch to auto-complete list!
+// Added aliases to auto-complete list!
 char *command_generator(const char *text, int state) {
     static int list_index, len;
-    char *commands[] = {"help", "exit", "cd", "netscan", "serial", "neofetch", "ask", NULL};
+    char *commands[] = {"help", "exit", "cd", "netscan", "serial", "neofetch", "ask", "ll", "update", "ports", NULL};
 
     if (!state) { list_index = 0; len = strlen(text); }
 
@@ -40,6 +59,30 @@ char **yuki_autocomplete(const char *text, int start, int end) {
     return NULL;
 }
 
+// --- V12: The Custom Aliases Engine ---
+// Intercepts short commands and dynamically rewrites the arguments array
+void apply_aliases(char **args) {
+    if (args[0] == NULL) return;
+
+    if (strcmp(args[0], "ll") == 0) {
+        args[0] = "ls";
+        args[1] = "-la";
+        args[2] = NULL;
+    } 
+    else if (strcmp(args[0], "update") == 0) {
+        args[0] = "sudo";
+        args[1] = "dnf";
+        args[2] = "update";
+        args[3] = "-y";
+        args[4] = NULL;
+    }
+    else if (strcmp(args[0], "ports") == 0) {
+        // Alias pointing to your own built-in tool!
+        args[0] = "netscan";
+        args[1] = NULL;
+    }
+}
+
 int main(int argc, char **argv) {
     char *command; 
     char *args[MAX_ARGS];
@@ -53,6 +96,13 @@ int main(int argc, char **argv) {
 
     signal(SIGCHLD, sigchld_handler);
     rl_attempted_completion_function = yuki_autocomplete;
+
+    // Load Persistent History at Boot
+    get_history_path(global_history_path);
+    read_history(global_history_path);
+    
+    // Register the Exit Hook
+    atexit(save_history_hook);
 
     if (argc > 1) {
         script_file = fopen(argv[1], "r");
@@ -88,21 +138,36 @@ int main(int argc, char **argv) {
                 printf("\nClosing YukiShell...\n");
                 break;
             }
-            if(strlen(command) > 0) add_history(command);
-            else { free(command); continue; }
+            if(strlen(command) > 0) {
+                add_history(command);
+                
+                if (strcmp(command, "clear") == 0 || strcmp(command, "cls") == 0) {
+                    printf("\033[H\033[J");
+                    free(command);
+                    continue;
+                }
+            } else { 
+                free(command); 
+                continue; 
+            }
         }
 
         parse_command(command, args, &background);
 
-        if (execute_builtin(args) == 1) { free(command); continue; }
-        // The parser checks for pipes first. The chaining magic happens inside execute_piped!
-        if (check_for_pipes(args, command2) == 1) { execute_piped(args, command2); free(command); continue; }
-        if (check_for_redirection(args, &filename) == 1) {
-            if (args[0] != NULL) execute_redirected(args, filename);
-            free(command); continue;
-        }
+        // --- V12: Route through the Aliases Engine BEFORE execution ---
+        apply_aliases(args);
 
-        execute_external(args, background);
+        if (args[0] != NULL) {
+            if (execute_builtin(args) == 1) { free(command); continue; }
+            
+            if (check_for_pipes(args, command2) == 1) { execute_piped(args, command2); free(command); continue; }
+            if (check_for_redirection(args, &filename) == 1) {
+                if (args[0] != NULL) execute_redirected(args, filename);
+                free(command); continue;
+            }
+
+            execute_external(args, background);
+        }
         free(command); 
     }
 
