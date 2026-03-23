@@ -93,9 +93,10 @@ void format_directory(char *cwd) {
     }
 }
 
+// V15.0: Added "dash" to autocomplete
 char *command_generator(const char *text, int state) {
     static int list_index, len;
-    char *commands[] = {"help", "exit", "cd", "netscan", "serial", "neofetch", "ask", NULL};
+    char *commands[] = {"help", "exit", "cd", "netscan", "serial", "neofetch", "ask", "dash", NULL};
 
     if (!state) { list_index = 0; len = strlen(text); }
 
@@ -158,7 +159,6 @@ int main(int argc, char **argv) {
             if (getcwd(cwd, sizeof(cwd)) != NULL) format_directory(cwd); 
             else strcpy(cwd, "unknown");
 
-            // Sleek, minimalist Ghostty-style prompt
             snprintf(prompt, sizeof(prompt), "%s%s╭─ yuki %s%s %s\n%s%s╰─❯%s ", 
                      RL_BOLD, GHOST_LAVENDER, GHOST_BLUE, cwd, RL_RESET, 
                      RL_BOLD, GHOST_PINK, RL_RESET);
