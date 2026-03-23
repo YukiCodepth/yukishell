@@ -21,7 +21,7 @@ int execute_builtin(char **args) {
     // --- AI Router ---
     if(strcmp(args[0], "ask") == 0) {
         if (args[1] == NULL) {
-            printf("\x1b[31mUsage: ask [--gemini|--search|--exec|--auto] \"your question\"\x1b[0m\n");
+            printf("\x1b[31mUsage: ask [--gemini|--search|--exec|--auto|--live] \"your prompt\"\x1b[0m\n");
             return 1;
         }
 
@@ -31,7 +31,9 @@ int execute_builtin(char **args) {
         if (strncmp(args[1], "--", 2) == 0) {
             strncpy(model_flag, args[1] + 2, sizeof(model_flag) - 1); 
             prompt_idx = 2; 
-            if (args[2] == NULL) {
+            
+            // V16: Allow --live to run without a text prompt
+            if (args[2] == NULL && strcmp(model_flag, "live") != 0) {
                 printf("\x1b[31mError: Please provide a prompt after the flag.\x1b[0m\n");
                 return 1;
             }
@@ -41,17 +43,28 @@ int execute_builtin(char **args) {
         strncat(py_cmd, model_flag, sizeof(py_cmd) - strlen(py_cmd) - 1);
         strncat(py_cmd, " \"", sizeof(py_cmd) - strlen(py_cmd) - 1);
 
-        for (int i = prompt_idx; args[i] != NULL; i++) {
-            strncat(py_cmd, args[i], sizeof(py_cmd) - strlen(py_cmd) - 1);
-            if (args[i+1] != NULL) {
-                strncat(py_cmd, " ", sizeof(py_cmd) - strlen(py_cmd) - 1);
+        // Safely append arguments if they exist
+        if (args[prompt_idx] != NULL) {
+            for (int i = prompt_idx; args[i] != NULL; i++) {
+                strncat(py_cmd, args[i], sizeof(py_cmd) - strlen(py_cmd) - 1);
+                if (args[i+1] != NULL) {
+                    strncat(py_cmd, " ", sizeof(py_cmd) - strlen(py_cmd) - 1);
+                }
             }
+        } else {
+            strncat(py_cmd, "LiveStreamInit", sizeof(py_cmd) - strlen(py_cmd) - 1);
         }
         strncat(py_cmd, "\"", sizeof(py_cmd) - strlen(py_cmd) - 1);
 
         if (strcmp(model_flag, "auto") == 0) {
             printf("\n\x1b[1m\x1b[31m[ ⚠️ SYSTEM OVERRIDE: GIVING AI RAW TERMINAL ACCESS ]\x1b[0m\n");
             printf("\x1b[33mPress Ctrl+C at ANY time to instantly revoke access and kill the agent.\x1b[0m\n\n");
+            system(py_cmd);
+            return 1;
+        }
+
+        // V16: Route for Yuki Live
+        if (strcmp(model_flag, "live") == 0) {
             system(py_cmd);
             return 1;
         }
@@ -214,7 +227,7 @@ int execute_builtin(char **args) {
     if(strcmp(args[0], "help") == 0) {
         printf("\n");
         printf("\033[38;2;137;180;250m\x1b[1m┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\x1b[0m\n");
-        printf("\033[38;2;137;180;250m\x1b[1m┃                   YUKI-SHELL V15.0 CORE                    ┃\x1b[0m\n");
+        printf("\033[38;2;137;180;250m\x1b[1m┃                   YUKI-SHELL V16.0 CORE                    ┃\x1b[0m\n");
         printf("\033[38;2;137;180;250m\x1b[1m┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\x1b[0m\n");
 
         printf("\n\x1b[1m  \033[38;2;166;227;161m[SYSTEM & CONFIGURATION]\x1b[0m\n");
@@ -232,7 +245,8 @@ int execute_builtin(char **args) {
         printf("   \x1b[1mask\x1b[0m         Query the Multi-Model AI Engine\n");
         printf("               \x1b[2mUsage: ask [flag] \"your prompt\"\x1b[0m\n");
         printf("               \x1b[33m--gemini, --search, --exec\x1b[0m\n");
-        printf("               \033[38;2;243;139;168m--auto\x1b[0m   (God Mode: Autonomous Terminal Agent)\n\n");
+        printf("               \033[38;2;137;180;250m--auto\x1b[0m   (Autonomous Agent + Viewfinder)\n");
+        printf("               \033[38;2;243;139;168m--live\x1b[0m   (Real-Time Continuous Video Stream)\n\n");
         
         printf("   \x1b[1mChaining\x1b[0m    Chain operators together (e.g., \x1b[33mls | grep .c > out\x1b[0m)\n");
 
