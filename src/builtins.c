@@ -2,6 +2,8 @@
 #include "../include/logo.h"
 #include <termios.h>
 #include <fcntl.h>
+#include <unistd.h>
+#include <sys/wait.h>
 
 int execute_builtin(char **args) {
     if (args[0] == NULL) return 1; 
@@ -145,16 +147,80 @@ int execute_builtin(char **args) {
         return 1;
     }
 
-    // --- [V13] The Updated Help Menu ---
+    // --- V15.0: Native Hardware Dashboard ---
+    if(strcmp(args[0], "dash") == 0) {
+        pid_t pid = fork();
+        if (pid == 0) {
+            while(1) {
+                printf("\033[H\033[J"); 
+
+                printf("\033[38;2;180;190;254m\x1b[1m╭━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╮\x1b[0m\n");
+                printf("\033[38;2;180;190;254m\x1b[1m┃\x1b[0m                 \033[38;2;245;194;231mYUKI LIVE TELEMETRY\033[0m                        \033[38;2;180;190;254m\x1b[1m┃\x1b[0m\n");
+                printf("\033[38;2;180;190;254m\x1b[1m┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫\x1b[0m\n");
+
+                FILE *load_fp = fopen("/proc/loadavg", "r");
+                if (load_fp) {
+                    double load1, load5, load15;
+                    fscanf(load_fp, "%lf %lf %lf", &load1, &load5, &load15);
+                    printf("\033[38;2;180;190;254m\x1b[1m┃\x1b[0m \033[38;2;137;180;250mCPU Load (1m, 5m, 15m):\033[0m %.2f, %.2f, %.2f\n", load1, load5, load15);
+                    fclose(load_fp);
+                }
+
+                FILE *mem_fp = fopen("/proc/meminfo", "r");
+                if (mem_fp) {
+                    char label[32];
+                    long total_mem = 0, free_mem = 0;
+                    while (fscanf(mem_fp, "%31s %ld kB", label, &total_mem) != EOF) {
+                        if (strcmp(label, "MemTotal:") == 0) break;
+                    }
+                    rewind(mem_fp);
+                    while (fscanf(mem_fp, "%31s %ld kB", label, &free_mem) != EOF) {
+                        if (strcmp(label, "MemAvailable:") == 0) break;
+                    }
+                    fclose(mem_fp);
+
+                    long used_mem = total_mem - free_mem;
+                    double used_gb = (double)used_mem / (1024.0 * 1024.0);
+                    double total_gb = (double)total_mem / (1024.0 * 1024.0);
+                    int mem_percent = (total_mem > 0) ? (int)((used_mem * 100.0) / total_mem) : 0;
+
+                    printf("\033[38;2;180;190;254m\x1b[1m┃\x1b[0m \033[38;2;166;227;161mMemory Usage:\033[0m %.2f GB / %.2f GB [%d%%]\n", used_gb, total_gb, mem_percent);
+                    
+                    printf("\033[38;2;180;190;254m\x1b[1m┃\x1b[0m \033[38;2;243;139;168mRAM:\033[0m [");
+                    int bar_width = 40;
+                    int filled = (mem_percent * bar_width) / 100;
+                    for (int i = 0; i < bar_width; i++) {
+                        if (i < filled) printf("\033[38;2;166;227;161m■\033[0m");
+                        else printf("\033[38;2;88;91;112m-\033[0m");
+                    }
+                    printf("]\n");
+                }
+
+                printf("\033[38;2;180;190;254m\x1b[1m╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯\x1b[0m\n");
+                printf("\n\033[38;2;88;91;112mPress [Ctrl+C] to return to shell\033[0m\n");
+                
+                fflush(stdout);
+                sleep(1); 
+            }
+            _exit(0); 
+        } else {
+            waitpid(pid, NULL, 0); 
+            printf("\n"); 
+        }
+        return 1;
+    }
+
+    // --- Help Menu ---
     if(strcmp(args[0], "help") == 0) {
         printf("\n");
         printf("\033[38;2;137;180;250m\x1b[1m┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓\x1b[0m\n");
-        printf("\033[38;2;137;180;250m\x1b[1m┃                   YUKI-SHELL V13.0 CORE                    ┃\x1b[0m\n");
+        printf("\033[38;2;137;180;250m\x1b[1m┃                   YUKI-SHELL V15.0 CORE                    ┃\x1b[0m\n");
         printf("\033[38;2;137;180;250m\x1b[1m┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛\x1b[0m\n");
 
         printf("\n\x1b[1m  \033[38;2;166;227;161m[SYSTEM & CONFIGURATION]\x1b[0m\n");
         printf("   \x1b[1mhelp\x1b[0m        Open this high-performance UI menu\n");
         printf("   \x1b[1mneofetch\x1b[0m    Display OS logo and live hardware specs\n");
+        printf("   \x1b[1mdash\x1b[0m        Launch the real-time hardware telemetry dashboard\n");
         printf("   \x1b[1mHistory\x1b[0m     Use \x1b[33m[Up/Down Arrows]\x1b[0m to navigate ~/.yuki_history\n");
         printf("   \x1b[1mAliases\x1b[0m     Dynamically loaded from \x1b[33m~/.yukirc\x1b[0m\n");
 
