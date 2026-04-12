@@ -6,6 +6,7 @@ import time
 import threading
 import base64
 import math
+from collections import deque
 from dotenv import load_dotenv
 
 try:
@@ -27,7 +28,7 @@ from langchain_core.tools import tool
 # --- Tools ---
 @tool
 def hardware_vision(query: str) -> str:
-    """Captures a static image from the webcam (Legacy V15 fallback)."""
+    """Captures a static image from the webcam."""
     console.print(f"[bold yellow]📷 AI Vision Activating:[/bold yellow] Opening Viewfinder...")
     try:
         os.environ["QT_LOGGING_RULES"] = "*=false" 
@@ -117,7 +118,75 @@ def main():
     gemini_version = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash")
     
     try:
-        if provider == "live":
+        # --- V17.0: TERMINAL OSCILLOSCOPE ---
+        if provider == "plot":
+            import serial
+            
+            port = prompt.strip()
+            baud_rate = 115200
+            
+            width = 70
+            height = 15
+            data = deque([0] * width, maxlen=width)
+            
+            console.print(f"\n[bold green]🟢 Yuki Telemetry Initiated.[/bold green]")
+            console.print(f"[dim]Attempting to lock onto {port} at {baud_rate} baud...[/dim]\n")
+            
+            try:
+                ser = serial.Serial(port, baud_rate, timeout=1)
+                time.sleep(1.5) 
+                
+                # Print blank lines to make room for the render block
+                print("\n" * (height + 4))
+                
+                # Hide the terminal cursor for smooth rendering
+                sys.stdout.write("\033[?25l")
+                
+                while True:
+                    line = ser.readline().decode('utf-8', errors='ignore').strip()
+                    if not line: continue
+                    
+                    try:
+                        val = float(line)
+                        data.append(val)
+                    except ValueError:
+                        continue 
+                        
+                    min_val = min(data)
+                    max_val = max(data)
+                    val_range = max_val - min_val if max_val != min_val else 1
+                    
+                    # Move cursor UP by the exact height of our render block
+                    sys.stdout.write(f"\033[{height + 4}A")
+                    
+                    # \033[K clears the line to prevent ghosting from previous frames
+                    print(f"\033[1;36mYuki Oscilloscope ❯\033[0m Port: {port} | \033[38;2;166;227;161mCurrent: {val:.2f}\033[0m | Min: {min_val:.2f} | Max: {max_val:.2f}\033[K\n\033[K", end="")
+                    
+                    for y in range(height, -1, -1):
+                        row_str = "│ "
+                        threshold = min_val + (y / height) * val_range
+                        for x in data:
+                            if x >= threshold:
+                                row_str += "\033[38;2;180;190;254m█\033[0m"
+                            else:
+                                row_str += " "
+                        print(row_str + "\033[K")
+                    
+                    print("└" + "─" * (width + 1) + "\033[K")
+                    print("\033[90mPress Ctrl+C to terminate telemetry.\033[0m\033[K")
+                    
+                    time.sleep(0.03) 
+                    
+            except serial.SerialException as e:
+                console.print(f"[bold red]Hardware Error: Could not connect to {port}.[/bold red]")
+            except KeyboardInterrupt:
+                # Restore the cursor before exiting
+                sys.stdout.write("\033[?25h")
+                console.print("\n[bold red]🔴 Telemetry Terminated.[/bold red]")
+                if 'ser' in locals(): ser.close()
+
+        # --- V16.0: INTERACTIVE VISUAL TUTOR ---
+        elif provider == "live":
             import cv2
             
             console.print("\n[bold green]🟢 Yuki Visual Tutor Initiated.[/bold green]")
@@ -139,7 +208,6 @@ def main():
                 while running[0]:
                     ret, frame = cap.read()
                     if ret:
-                        # --- BREATHING HUD OVERLAY ---
                         pulse = (math.sin(time.time() * 3.0) + 1) / 2
                         intensity = int(pulse * 205 + 50)
                         hud_color = (0, 0, intensity)
@@ -173,11 +241,9 @@ def main():
             try:
                 while running[0]:
                     user_input = input("\033[1;36mAman ❯ \033[0m")
-                    
                     if user_input.lower() in ['exit', 'quit', 'q']:
                         running[0] = False
                         break
-                    
                     if not user_input.strip(): continue
                     
                     with frame_lock:
