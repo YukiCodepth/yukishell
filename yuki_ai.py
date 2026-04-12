@@ -139,18 +139,10 @@ def main():
                 while running[0]:
                     ret, frame = cap.read()
                     if ret:
-                        # --- V16.1: BREATHING HUD OVERLAY ---
-                        # Calculate a smooth sine wave based on time (0.0 to 1.0)
-                        # Multiplier (3.0) controls the speed of the breathing
+                        # --- BREATHING HUD OVERLAY ---
                         pulse = (math.sin(time.time() * 3.0) + 1) / 2
-                        
-                        # Map the pulse to a color intensity (50 is dark red, 255 is bright neon red)
                         intensity = int(pulse * 205 + 50)
-                        
-                        # OpenCV uses BGR (Blue, Green, Red). So (0, 0, intensity) is pure breathing red.
                         hud_color = (0, 0, intensity)
-                        
-                        # Draw small text in the top left corner
                         cv2.putText(frame, "yuki ai live", (15, 25), cv2.FONT_HERSHEY_SIMPLEX, 
                                     0.4, hud_color, 1, cv2.LINE_AA)
 
