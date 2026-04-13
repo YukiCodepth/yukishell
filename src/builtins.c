@@ -73,6 +73,15 @@ void live_fastfetch_boot() {
 #include <sys/wait.h>
 
 int execute_builtin(char **args) {
+    if (strcmp(args[0], "net") == 0) {
+        if (args[1] != NULL && strcmp(args[1], "scan") == 0) {
+            system("python3 yuki_net.py");
+        } else {
+            printf("\033[33mUsage: net scan\033[0m\n");
+        }
+        return 1;
+    }
+
     if (strcmp(args[0], "i2c") == 0) {
         if (args[1] != NULL && strcmp(args[1], "scan") == 0) {
             int status = system("./i2c_scan");
