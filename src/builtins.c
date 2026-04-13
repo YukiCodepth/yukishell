@@ -1,3 +1,70 @@
+
+#include <sys/sysinfo.h>
+#include <sys/select.h>
+#include <termios.h>
+#include <unistd.h>
+#include <stdio.h>
+#include <string.h>
+
+int kbhit_boot() {
+    struct timeval tv = { 0L, 0L };
+    fd_set fds;
+    FD_ZERO(&fds);
+    FD_SET(0, &fds);
+    return select(1, &fds, NULL, NULL, &tv) > 0;
+}
+
+void live_fastfetch_boot() {
+    struct termios oldt, newt;
+    tcgetattr(STDIN_FILENO, &oldt);
+    newt = oldt;
+    newt.c_lflag &= ~(ICANON | ECHO);
+    tcsetattr(STDIN_FILENO, TCSANOW, &newt);
+
+    printf("\033[2J\033[?25l"); // Clear screen, hide cursor
+    
+    while(!kbhit_boot()) {
+        struct sysinfo info;
+        sysinfo(&info);
+        long total_ram = (info.totalram * info.mem_unit) / (1024 * 1024);
+        long free_ram = (info.freeram * info.mem_unit) / (1024 * 1024);
+        long used_ram = total_ram - free_ram;
+        long h = info.uptime / 3600;
+        long m = (info.uptime % 3600) / 60;
+        long s = info.uptime % 60;
+
+        printf("\033[H\n\n"); // Move to top left, add padding
+        
+        // --- FASTFETCH LAYOUT ---
+        printf("\033[38;2;180;190;254m"); // Lavender
+        printf("                       \033[1;37myuki\033[0m@\033[1;37maegis-edge\033[0m\n");
+        printf("      ▰▰▰▰▰▰▰          \033[38;2;180;190;254m-------------------\033[0m\n");
+        printf("    ▰▰▰▰▰▰▰▰▰▰▰        \033[1;36mOS\033[0m      Aegis-Edge Core v18.0\n");
+        printf("   ▰▰▰       ▰▰▰       \033[1;36mKERNEL\033[0m  Yuki Dynamic\n");
+        printf("   ▰▰▰       ▰▰▰       \033[1;36mUPTIME\033[0m  %02ldh %02ldm %02lds\n", h, m, s);
+        
+        printf("    ▰▰▰▰▰▰▰▰▰▰▰        \033[1;36mMEM\033[0m     [");
+        int filled = 0;
+        if (total_ram > 0) filled = (used_ram * 15) / total_ram;
+        for(int i=0; i<15; i++) { 
+            if(i < filled) printf("\033[38;2;166;227;161m■\033[0m"); // Green blocks
+            else printf("\033[90m-\033[0m"); // Dim dashes
+        }
+        printf("] %ldMB / %ldMB\n", used_ram, total_ram);
+        
+        printf("      ▰▰▰▰▰▰▰          \033[1;36mSHELL\033[0m   YukiShell (C-Native)\n");
+        printf("\033[0m\n");
+        printf("   \033[5m\033[90m[ Press ANY KEY to initialize command prompt ]\033[0m\n");
+
+        fflush(stdout);
+        usleep(500000); // Wait 500ms before drawing the next frame
+    }
+
+    getchar(); // Consume the keypress
+    tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
+    printf("\033[?25h\033[2J\033[H"); // Show cursor, wipe screen, start shell
+}
+
 #include "../include/yukishell.h"
 #include "../include/logo.h"
 #include <termios.h>
@@ -6,6 +73,27 @@
 #include <sys/wait.h>
 
 int execute_builtin(char **args) {
+    if (strcmp(args[0], "net") == 0) {
+        if (args[1] != NULL && strcmp(args[1], "scan") == 0) {
+            system("python3 yuki_net.py");
+        } else {
+            printf("\033[33mUsage: net scan\033[0m\n");
+        }
+        return 1;
+    }
+
+    if (strcmp(args[0], "i2c") == 0) {
+        if (args[1] != NULL && strcmp(args[1], "scan") == 0) {
+            int status = system("./i2c_scan");
+            if (status == -1) {
+                printf("\033[31m[!] YukiShell Error: i2c_scan binary not found. Did you compile it?\033[0m\n");
+            }
+        } else {
+            printf("\033[33mUsage: i2c scan\033[0m\n");
+        }
+        return 1;
+    }
+
     if (args[0] == NULL) return 1; 
 
     if(strcmp(args[0], "exit") == 0) {
@@ -13,8 +101,8 @@ int execute_builtin(char **args) {
         exit(0); 
     }
 
-    if(strcmp(args[0], "neofetch") == 0) {
-        print_boot_screen();
+    if (strcmp(args[0], "neofetch") == 0) {
+        live_fastfetch_boot();
         return 1;
     }
 
