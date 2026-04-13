@@ -1,3 +1,4 @@
 *.o
 yukishell
 .env
+i2c_scan

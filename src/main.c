@@ -113,6 +113,8 @@ char **yuki_autocomplete(const char *text, int start, int end) {
     return NULL;
 }
 
+extern void live_fastfetch_boot();
+
 int main(int argc, char **argv) {
     char *command; 
     char *args[MAX_ARGS];
