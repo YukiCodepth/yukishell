@@ -1,3 +1,4 @@
+#include <unistd.h>
 #include "../include/yukishell.h"
 #include "../include/logo.h"
 #include <readline/readline.h>
@@ -165,7 +166,7 @@ int main(int argc, char **argv) {
                      RL_BOLD, GHOST_LAVENDER, GHOST_BLUE, cwd, RL_RESET, 
                      RL_BOLD, GHOST_PINK, RL_RESET);
 
-            command = readline(prompt);
+            command = readline(geteuid() == 0 ? "\n\033[38;2;243;139;168m╭─ ⟁ [ SYSTEM OVERRIDE: ROOT ]\n╰─❯ \033[0m" : prompt);
             
             if (command == NULL) {
                 printf("\n\033[38;2;243;139;168m[!] Closing YukiShell...\033[0m\n");

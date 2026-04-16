@@ -1,3 +1,6 @@
+#define _GNU_SOURCE
+#include <sched.h>
+
 
 #include <sys/sysinfo.h>
 #include <sys/select.h>
@@ -447,6 +450,173 @@ int execute_builtin(char **args) {
             }
         } else {
             printf("\033[31mUsage: vault [encrypt|decrypt] <filename>\033[0m\n");
+        }
+        return 1;
+    }
+
+
+    // --- V22.0: NATIVE HEX VIEWER ---
+    if(strcmp(args[0], "hexview") == 0) {
+        if(args[1] == NULL) { printf("\033[31mUsage: hexview <file>\033[0m\n"); return 1; }
+        FILE *fp = fopen(args[1], "rb");
+        if(!fp) { perror("\033[31m[-] Failed to open file\033[0m"); return 1; }
+        
+        unsigned char buffer[16];
+        size_t bytes_read;
+        size_t offset = 0;
+        
+        printf("\n\033[38;2;137;180;250m\x1b[1m[ YUKI HEX SENTINEL ]\033[0m Target: %s\n\n", args[1]);
+        
+        while((bytes_read = fread(buffer, 1, 16, fp)) > 0) {
+            printf("\033[38;2;180;190;254m%08zx\033[0m  ", offset); 
+            
+            for(size_t i = 0; i < 16; i++) {
+                if(i < bytes_read) {
+                    if(buffer[i] == 0x00) printf("\033[90m%02x \033[0m", buffer[i]); 
+                    else printf("\033[38;2;249;226;175m%02x \033[0m", buffer[i]); 
+                } else {
+                    printf("   ");
+                }
+                if(i == 7) printf(" "); 
+            }
+            
+            printf(" |");
+            for(size_t i = 0; i < bytes_read; i++) {
+                if(buffer[i] >= 32 && buffer[i] <= 126) 
+                    printf("\033[38;2;166;227;161m%c\033[0m", buffer[i]); 
+                else 
+                    printf("\033[90m.\033[0m"); 
+            }
+            printf("|\n");
+            offset += 16;
+        }
+        fclose(fp);
+        printf("\n");
+        return 1;
+    }
+
+    // --- V22.0: HARDWARE WATCHDOG ---
+    if(strcmp(args[0], "lsdev") == 0) {
+        #include <dirent.h>
+        DIR *d = opendir("/sys/bus/usb/devices");
+        if (d) {
+            struct dirent *dir;
+            printf("\n\033[38;2;166;227;161m\x1b[1m[ YUKI HARDWARE WATCHDOG ]\033[0m Scanning System Buses...\n\n");
+            printf("\033[1;36m%-15s %-12s %-40s\033[0m\n", "SYS-PORT", "VID:PID", "MANUFACTURER / PRODUCT");
+            printf("------------------------------------------------------------------------\n");
+            
+            while ((dir = readdir(d)) != NULL) {
+                if(dir->d_name[0] == '.' || strchr(dir->d_name, ':')) continue; 
+                
+                char path[512], vendor[64] = "Unknown", product[128] = "Unknown Device";
+                char vid[16] = "", pid[16] = "";
+                FILE *f;
+
+                snprintf(path, sizeof(path), "/sys/bus/usb/devices/%s/idVendor", dir->d_name);
+                if((f = fopen(path, "r"))) { fgets(vid, 16, f); vid[strcspn(vid, "\n")] = 0; fclose(f); }
+
+                snprintf(path, sizeof(path), "/sys/bus/usb/devices/%s/idProduct", dir->d_name);
+                if((f = fopen(path, "r"))) { fgets(pid, 16, f); pid[strcspn(pid, "\n")] = 0; fclose(f); }
+
+                snprintf(path, sizeof(path), "/sys/bus/usb/devices/%s/manufacturer", dir->d_name);
+                if((f = fopen(path, "r"))) { fgets(vendor, 64, f); vendor[strcspn(vendor, "\n")] = 0; fclose(f); }
+
+                snprintf(path, sizeof(path), "/sys/bus/usb/devices/%s/product", dir->d_name);
+                if((f = fopen(path, "r"))) { fgets(product, 128, f); product[strcspn(product, "\n")] = 0; fclose(f); }
+
+                if(strlen(vid) > 0) {
+                    printf("\033[38;2;180;190;254m%-15s\033[0m \033[38;2;245;194;231m%s:%s\033[0m  \033[32m%s %s\033[0m\n", 
+                           dir->d_name, vid, pid, vendor, product);
+                }
+            }
+            closedir(d);
+            printf("\n");
+        } else {
+            printf("\033[31m[-] Sysfs not accessible. Cannot map hardware.\033[0m\n");
+        }
+        return 1;
+    }
+
+
+    // --- V23.0: GHOST MODE (Ephemeral Sandboxing) ---
+    if(strcmp(args[0], "ghostmode") == 0) {
+        printf("\n\033[38;2;203;166;247m  ✧ [ GHOST VORTEX ] Initiating Ephemeral Namespace...\033[0m\n");
+        printf("\033[90mRipping namespace parameters...\033[0m\n");
+        
+        // Attempt to unshare the mount and UTS namespaces
+        if(unshare(CLONE_NEWNS | CLONE_NEWUTS) != 0) {
+            printf("\033[31m[-] Kernel rejected unshare.\033[0m\n");
+            printf("\033[33m[!] Ghost Mode requires elevated capabilities. Try: sudo ./yukishell\033[0m\n\n");
+            return 1;
+        }
+        
+        // Mount a completely ephemeral RAM disk over /tmp
+        system("mount -t tmpfs -o size=512m tmpfs /tmp");
+        chdir("/tmp");
+        
+        printf("\033[32m[+] Reality isolated.\033[0m You are now in an ephemeral container.\n");
+        printf("\033[32m[+] All files written to /tmp exist only in RAM and will vanish on exit.\033[0m\n\n");
+        
+        // Spawn a nested, isolated bash shell as the "Ghost"
+        system("env PROMPT_COMMAND=\'PS1=\"\\[\\e[38;2;203;166;247m\\]╭─ ✧ [ GHOST VORTEX ] ✧ \\w\\n\\[\\e[38;2;203;166;247m\\]╰─❯ \\[\\e[0m\\] \"\' bash --norc");
+        
+        // Clean up the timeline when they type exit
+        system("umount -l /tmp");
+        printf("\n\033[1;35m[ 👻 GHOST MODE TERMINATED ]\033[0m Timeline restored. Traces erased.\n\n");
+        return 1;
+    }
+
+    // --- V23.0: YUKI-QL (Object-Oriented Pipes) ---
+    if(strcmp(args[0], "yql") == 0) {
+        if(args[1] == NULL || args[2] == NULL || args[3] == NULL) {
+            printf("\033[31mUsage: <cmd> | yql <COLUMN_NUMBER> <OPERATOR> <VALUE>\033[0m\n");
+            printf("\033[90mExample: ps aux | yql 4 > 5.0  (Show processes using > 5%% RAM)\033[0m\n");
+            printf("\033[90mExample: ls -l  | yql 5 > 1000 (Show files larger than 1000 bytes)\033[0m\n\n");
+            return 1;
+        }
+        
+        int target_col = atoi(args[1]);
+        char *op = args[2];
+        double threshold = atof(args[3]);
+        
+        char line[1024];
+        int is_header = 1;
+        
+        // Intercept standard input from the pipe
+        while(fgets(line, sizeof(line), stdin)) {
+            // Always print the header row for context
+            if(is_header) {
+                printf("\033[1;36m%s\033[0m", line);
+                is_header = 0;
+                continue;
+            }
+            
+            // Duplicate the line because strtok destroys the original string
+            char line_copy[1024];
+            strcpy(line_copy, line);
+            
+            char *token = strtok(line_copy, " \t");
+            int current_col = 1;
+            double cell_val = 0.0;
+            int match = 0;
+            
+            // Walk the columns to find the target struct
+            while(token != NULL) {
+                if(current_col == target_col) {
+                    cell_val = atof(token);
+                    if(strcmp(op, ">") == 0 && cell_val > threshold) match = 1;
+                    if(strcmp(op, "<") == 0 && cell_val < threshold) match = 1;
+                    if(strcmp(op, "==") == 0 && cell_val == threshold) match = 1;
+                    break;
+                }
+                token = strtok(NULL, " \t");
+                current_col++;
+            }
+            
+            // If the math checks out, print the row in green
+            if(match) {
+                printf("\033[32m%s\033[0m", line);
+            }
         }
         return 1;
     }
