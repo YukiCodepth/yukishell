@@ -29,7 +29,7 @@ from langchain_core.tools import tool
 @tool
 def hardware_vision(query: str) -> str:
     """Captures a static image from the webcam."""
-    pass # (Legacy tool logic hidden for brevity, handled by new modes)
+    pass 
 
 @tool
 def web_search(query: str) -> str:
@@ -92,7 +92,6 @@ def main():
                 ret, frame = cap.read()
                 if not ret: break
                 
-                # Add a scanning reticle to the center of the camera
                 height, width = frame.shape[:2]
                 cx, cy = width // 2, height // 2
                 cv2.rectangle(frame, (cx - 100, cy - 50), (cx + 100, cy + 50), (0, 255, 0), 2)
@@ -110,15 +109,13 @@ def main():
             cap.release()
             cv2.destroyAllWindows()
 
-            if frame_to_send is None: 
-                return
+            if frame_to_send is None: return
 
             _, buffer = cv2.imencode('.jpg', frame_to_send)
             img_b64 = base64.b64encode(buffer).decode('utf-8')
             
-            llm = ChatGoogleGenerativeAI(model=gemini_version, temperature=0.1) # Low temp for factual accuracy
+            llm = ChatGoogleGenerativeAI(model=gemini_version, temperature=0.1)
             
-            # The God-Tier Prompt Engineering
             sys_msg = (
                 "You are an expert ECE component analyzer. Look at the provided image of an electronic component or microchip. "
                 "Read the text written on it to identify the exact part number (e.g., NE555, LM324, ATmega328). "
@@ -158,14 +155,11 @@ def main():
                 while True:
                     line = ser.readline().decode('utf-8', errors='ignore').strip()
                     if not line: continue
-                    try:
-                        val = float(line)
-                        data.append(val)
-                    except ValueError:
-                        continue 
-                        
-                    min_val = min(data)
-                    max_val = max(data)
+                    try: val = float(line)
+                    except ValueError: continue 
+                    data.append(val)    
+                    
+                    min_val, max_val = min(data), max(data)
                     val_range = max_val - min_val if max_val != min_val else 1
                     
                     sys.stdout.write(f"\033[{height + 4}A")
@@ -174,11 +168,7 @@ def main():
                     for y in range(height, -1, -1):
                         row_str = "│ "
                         threshold = min_val + (y / height) * val_range
-                        for x in data:
-                            if x >= threshold:
-                                row_str += "\033[38;2;180;190;254m█\033[0m"
-                            else:
-                                row_str += " "
+                        for x in data: row_str += "\033[38;2;180;190;254m█\033[0m" if x >= threshold else " "
                         print(row_str + "\033[K")
                     
                     print("└" + "─" * (width + 1) + "\033[K")
@@ -213,8 +203,7 @@ def main():
                         pulse = (math.sin(time.time() * 3.0) + 1) / 2
                         intensity = int(pulse * 205 + 50)
                         cv2.putText(frame, "yuki ai live", (15, 25), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, intensity), 1, cv2.LINE_AA)
-                        with frame_lock:
-                            latest_frame[0] = frame.copy()
+                        with frame_lock: latest_frame[0] = frame.copy()
                         cv2.imshow('Yuki Live [Interactive Stream]', frame)
                     if cv2.waitKey(1) & 0xFF in [27, ord('q')]:
                         running[0] = False
@@ -236,8 +225,7 @@ def main():
                         running[0] = False
                         break
                     if not user_input.strip(): continue
-                    with frame_lock:
-                        frame_to_analyze = latest_frame[0].copy()
+                    with frame_lock: frame_to_analyze = latest_frame[0].copy()
                     _, buffer = cv2.imencode('.jpg', frame_to_analyze)
                     img_b64 = base64.b64encode(buffer).decode('utf-8')
                     user_msg = HumanMessage(content=[{"type": "text", "text": user_input}, {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}}])
@@ -245,25 +233,108 @@ def main():
                     display_ai_response(response.content)
                     chat_history.extend([user_msg, response])
                     if len(chat_history) > 7: chat_history = [chat_history[0]] + chat_history[-6:]
-            except KeyboardInterrupt:
-                running[0] = False
-            finally:
-                os._exit(0) 
+            except KeyboardInterrupt: running[0] = False
+            finally: os._exit(0) 
 
         # --- OTHER MODES ---
-        elif provider == "auto":
-            # Compacted for brevity
-            pass
+        elif provider == "auto": pass
         elif provider == "exec":
             llm = ChatGoogleGenerativeAI(model=gemini_version, temperature=0.0)
             response = llm.invoke([SystemMessage(content="Output ONLY the raw bash command."), HumanMessage(content=prompt)])
             print(response.content.replace("```bash", "").replace("```sh", "").replace("```", "").strip())
+            
+        # --- PHASE 19.2: PAC-MAN LOADER, FLUID UI & LIVE MARKDOWN ---
         else: 
             llm = ChatGoogleGenerativeAI(model=gemini_version, temperature=0.7)
-            display_ai_response(llm.invoke([HumanMessage(content=prompt)]).content)
+            
+            # 1. The Threaded Pac-Man Spinner Function
+            def animated_thinking(stop_event):
+                import itertools
+                # Pac-Man (Yellow) eating dots (Green) with exact spacing to prevent jitter
+                frames = [
+                    "\033[38;2;249;226;175mᗧ\033[0m \033[38;2;166;227;161m• • •\033[0m  ",
+                    "\033[38;2;249;226;175mO\033[0m \033[38;2;166;227;161m • •\033[0m   ",
+                    "\033[38;2;249;226;175mᗧ\033[0m \033[38;2;166;227;161m  •\033[0m    ",
+                    "\033[38;2;249;226;175mO\033[0m        "
+                ]
+                statuses = ["Pinging Gemini Core...", "Analyzing Context...", "Allocating Memory...", "Formatting Output..."]
+                frame_cycle = itertools.cycle(frames)
+                status_cycle = itertools.cycle(statuses)
+                idx = 0
+                while not stop_event.is_set():
+                    if idx % 15 == 0: current_status = next(status_cycle)
+                    sys.stdout.write(f"\r  {next(frame_cycle)} \033[38;2;180;190;254m[ {current_status} ]\033[0m\033[K")
+                    sys.stdout.flush()
+                    time.sleep(0.12) # Slightly slower for the perfect munching speed
+                    idx += 1
+
+            stop_event = threading.Event()
+            spinner_thread = threading.Thread(target=animated_thinking, args=(stop_event,))
+            print("\n")
+            spinner_thread.start()
+
+            try:
+                response_stream = llm.stream([HumanMessage(content=prompt)])
+                first_chunk = next(response_stream)
+                stop_event.set()
+                spinner_thread.join()
+                
+                sys.stdout.write("\r\033[K")
+                if console: console.print("[bold magenta]━━━ Yuki AI Response ━━━[/bold magenta]\n")
+                else: print("\033[1;35m━━━ Yuki AI Response ━━━\033[0m\n")
+                
+                buffer = first_chunk.content
+                is_bold, is_code = False, False
+                
+                def flush_buffer(buf, bold_state, code_state):
+                    while len(buf) > 0:
+                        if buf.startswith("**"):
+                            bold_state = not bold_state
+                            sys.stdout.write("\033[1m" if bold_state else "\033[0m")
+                            buf = buf[2:]
+                            continue
+                        if buf == "*": break 
+                        if buf.startswith("* "):
+                            sys.stdout.write("\033[38;2;137;180;250m•\033[0m ") 
+                            buf = buf[2:]
+                            continue
+                        if buf == "`": break 
+                        if buf.startswith("`"):
+                            code_state = not code_state
+                            sys.stdout.write("\033[33m" if code_state else "\033[0m")
+                            buf = buf[1:]
+                            continue
+                        
+                        sys.stdout.write(buf[0])
+                        sys.stdout.flush()
+                        buf = buf[1:]
+                        time.sleep(0.003) 
+                    return buf, bold_state, code_state
+
+                buffer, is_bold, is_code = flush_buffer(buffer, is_bold, is_code)
+                for chunk in response_stream:
+                    buffer += chunk.content
+                    buffer, is_bold, is_code = flush_buffer(buffer, is_bold, is_code)
+                
+                if buffer:
+                    sys.stdout.write(buffer.replace("**", "").replace("*", ""))
+                    sys.stdout.flush()
+                
+                print("\n\n")
+                if console: console.print("[bold magenta]━━━━━━━━━━━━━━━━━━━━━━━━[/bold magenta]\n")
+                else: print("\033[1;35m━━━━━━━━━━━━━━━━━━━━━━━━\033[0m\n")
+
+            except StopIteration:
+                stop_event.set()
+                sys.stdout.write("\r\033[K\033[31m[!] No response generated.\033[0m\n")
+            except Exception as e:
+                stop_event.set()
+                spinner_thread.join()
+                sys.stdout.write(f"\r\033[K\033[31m[!] API Error: {e}\033[0m\n")
 
     except Exception as e:
-        console.print(f"[bold red][!] API Error:[/bold red] {e}")
+        if console: console.print(f"[bold red][!] API Error:[/bold red] {e}")
+        else: print(f"\033[31m[!] API Error: {e}\033[0m")
 
 if __name__ == "__main__":
     main()
