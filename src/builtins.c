@@ -343,6 +343,114 @@ int execute_builtin(char **args) {
         return 1;
     }
 
+
+    // --- V21.0: NATIVE PROCESS MANAGER ---
+    if(strcmp(args[0], "taskmgr") == 0) {
+        pid_t pid = fork();
+        if (pid == 0) {
+            printf("\033[2J\033[?25l"); // Clear screen & hide cursor
+            system("stty raw -echo");   // Set terminal to raw non-blocking mode
+            int flags = fcntl(STDIN_FILENO, F_GETFL, 0);
+            fcntl(STDIN_FILENO, F_SETFL, flags | O_NONBLOCK);
+
+            while(1) {
+                printf("\033[H"); // Home cursor (Prevents flickering)
+                printf("\r\033[38;2;180;190;254m\x1b[1m╭━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╮\x1b[0m\n");
+                printf("\r\033[38;2;180;190;254m\x1b[1m┃\x1b[0m                 \033[38;2;245;194;231mYUKI TASK MANAGER\033[0m                          \033[38;2;180;190;254m\x1b[1m┃\x1b[0m\n");
+                printf("\r\033[38;2;180;190;254m\x1b[1m┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫\x1b[0m\n");
+
+                FILE *fp = popen("ps -eo pid,user,%mem,comm --sort=-%mem | head -n 12 | tail -n +2", "r");
+                if (fp) {
+                    char line[256];
+                    printf("\r\033[38;2;180;190;254m\x1b[1m┃\x1b[0m \033[38;2;137;180;250m%-8s %-12s %-8s %-24s\033[0m \033[38;2;180;190;254m\x1b[1m┃\x1b[0m\n", "PID", "USER", "MEM%", "COMMAND");
+                    while(fgets(line, sizeof(line), fp)) {
+                        line[strcspn(line, "\n")] = 0;
+                        printf("\r\033[38;2;180;190;254m\x1b[1m┃\x1b[0m \033[38;2;166;227;161m%-55s\033[0m \033[38;2;180;190;254m\x1b[1m┃\x1b[0m\n", line);
+                    }
+                    pclose(fp);
+                }
+                printf("\r\033[38;2;180;190;254m\x1b[1m╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯\x1b[0m\n");
+                printf("\r\n\033[38;2;243;139;168m [q] Quit \033[0m | \033[38;2;249;226;175m [k] Kill Process \033[0m\033[K\n");
+
+                char c;
+                if (read(STDIN_FILENO, &c, 1) > 0) {
+                    if (c == 'q' || c == 'Q') break;
+                    if (c == 'k' || c == 'K') {
+                        system("stty cooked echo"); // Restore normal input
+                        fcntl(STDIN_FILENO, F_SETFL, flags);
+                        printf("\r\n\033[33m ❯ Enter PID to terminate: \033[0m");
+                        char pid_str[16];
+                        if (fgets(pid_str, 16, stdin)) {
+                            int target = atoi(pid_str);
+                            if(target > 0) {
+                                kill(target, SIGKILL);
+                                printf("\r\033[31m [!] SIGKILL sent to %d\033[0m\n", target);
+                                usleep(800000);
+                            }
+                        }
+                        // Reset back to raw mode for loop
+                        system("stty raw -echo");
+                        fcntl(STDIN_FILENO, F_SETFL, flags | O_NONBLOCK);
+                        printf("\033[2J"); 
+                    }
+                }
+                usleep(500000); // 500ms real-time refresh
+            }
+            system("stty cooked echo");
+            fcntl(STDIN_FILENO, F_SETFL, flags);
+            printf("\033[2J\033[H\033[?25h"); // Restore terminal state
+            _exit(0);
+        } else {
+            waitpid(pid, NULL, 0); 
+        }
+        return 1;
+    }
+
+    // --- V21.0: CRYPTOGRAPHIC VAULT ---
+    if(strcmp(args[0], "vault") == 0) {
+        if (args[1] == NULL || args[2] == NULL) {
+            printf("\033[31mUsage: vault [encrypt|decrypt] <filename>\033[0m\n");
+            return 1;
+        }
+        char *action = args[1];
+        char *file = args[2];
+        
+        if (access(file, F_OK) != 0) {
+            printf("\033[31m[-] Target file '%s' does not exist.\033[0m\n", file);
+            return 1;
+        }
+
+        char *pass = getpass("\033[38;2;203;166;247m[ Vault ] Enter Master Password: \033[0m");
+        if (!pass) return 1;
+
+        char cmd[1024];
+        if(strcmp(action, "encrypt") == 0) {
+            snprintf(cmd, sizeof(cmd), "openssl enc -aes-256-cbc -salt -pbkdf2 -in %s -out %s.vault -pass pass:%s 2>/dev/null", file, file, pass);
+            if(system(cmd) == 0) {
+                remove(file); // Securely destroy original
+                printf("\033[32m[+] File encrypted to %s.vault\033[0m\n", file);
+                printf("\033[31m[!] Original unencrypted file shredded.\033[0m\n");
+            } else printf("\033[31m[-] Encryption failed.\033[0m\n");
+        } 
+        else if (strcmp(action, "decrypt") == 0) {
+            char out_file[256];
+            strcpy(out_file, file);
+            char *ext = strstr(out_file, ".vault");
+            if(ext) *ext = '\0'; else strcat(out_file, ".dec");
+
+            snprintf(cmd, sizeof(cmd), "openssl enc -d -aes-256-cbc -pbkdf2 -in %s -out %s -pass pass:%s 2>/dev/null", file, out_file, pass);
+            if(system(cmd) == 0) {
+                printf("\033[32m[+] File securely decrypted to %s\033[0m\n", out_file);
+            } else {
+                printf("\033[31m[-] Decryption failed. Incorrect password or corrupted data.\033[0m\n");
+                remove(out_file);
+            }
+        } else {
+            printf("\033[31mUsage: vault [encrypt|decrypt] <filename>\033[0m\n");
+        }
+        return 1;
+    }
+
     if(strcmp(args[0], "cd") == 0) {
         if(args[1] != NULL && chdir(args[1]) != 0) perror("cd failed");
         return 1;
