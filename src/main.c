@@ -1,3 +1,4 @@
+#include "logo.h"
 #include <unistd.h>
 #include "../include/yukishell.h"
 #include "../include/logo.h"

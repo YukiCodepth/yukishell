@@ -1,5 +1,7 @@
 #define _GNU_SOURCE
 #include <sched.h>
+#include <dirent.h>
+#include <sys/stat.h>
 
 
 #include <sys/sysinfo.h>
@@ -497,7 +499,6 @@ int execute_builtin(char **args) {
 
     // --- V22.0: HARDWARE WATCHDOG ---
     if(strcmp(args[0], "lsdev") == 0) {
-        #include <dirent.h>
         DIR *d = opendir("/sys/bus/usb/devices");
         if (d) {
             struct dirent *dir;
@@ -619,6 +620,67 @@ int execute_builtin(char **args) {
             }
         }
         return 1;
+    }
+
+
+    // --- V24.0: YUKI READ (xcat) ---
+    if(strcmp(args[0], "xcat") == 0) {
+        if(args[1] == NULL) { printf("\033[31mUsage: xcat <file>\033[0m\n"); return 1; }
+        FILE *fp = fopen(args[1], "r");
+        if(!fp) { perror("\033[31m[-] File access denied\033[0m"); return 1; }
+        char line[1024]; int count = 1;
+        printf("\n\033[38;2;137;180;250m╭── [ READING: %s ]\033[0m\n", args[1]);
+        while(fgets(line, sizeof(line), fp)) printf("\033[90m│ %4d │\033[0m \033[38;2;205;214;244m%s\033[0m", count++, line);
+        printf("\033[38;2;137;180;250m╰────────────────────────\033[0m\n\n");
+        fclose(fp); return 1;
+    }
+
+    // --- V24.0: YUKI LIST (xls) ---
+    if(strcmp(args[0], "xls") == 0) {
+        DIR *d; struct dirent *dir; struct stat file_stat;
+        char *target_dir = args[1] ? args[1] : ".";
+        d = opendir(target_dir);
+        if(d) {
+            printf("\n\033[1;36m%-10s %-15s %s\033[0m\n", "SIZE", "TYPE", "NAME");
+            printf("\033[90m──────────────────────────────────────────────\033[0m\n");
+            while((dir = readdir(d)) != NULL) {
+                if(dir->d_name[0] == '.') continue; 
+                char path[1024]; snprintf(path, sizeof(path), "%s/%s", target_dir, dir->d_name);
+                stat(path, &file_stat);
+                double size = file_stat.st_size; char* unit = "B";
+                if(size > 1024) { size /= 1024; unit = "KB"; }
+                if(size > 1024) { size /= 1024; unit = "MB"; }
+                
+                if(S_ISDIR(file_stat.st_mode)) printf("\033[38;2;180;190;254m%-7.1f %-2s\033[0m \033[38;2;245;194;231m%-15s\033[0m \033[1;34m%s/\033[0m\n", size, unit, "<DIR>", dir->d_name);
+                else if(file_stat.st_mode & S_IXUSR) printf("\033[38;2;166;227;161m%-7.1f %-2s\033[0m \033[38;2;137;180;250m%-15s\033[0m \033[1;32m%s*\033[0m\n", size, unit, "<EXEC>", dir->d_name);
+                else printf("\033[38;2;205;214;244m%-7.1f %-2s\033[0m \033[90m%-15s\033[0m %s\n", size, unit, "FILE", dir->d_name);
+            }
+            closedir(d); printf("\n");
+        } else printf("\033[31m[-] Cannot open directory\033[0m\n");
+        return 1;
+    }
+
+    // --- V24.0: YUKI NET-WATCH (xping) ---
+    if(strcmp(args[0], "xping") == 0) {
+        if(args[1] == NULL) { printf("\033[31mUsage: xping <host>\033[0m\n"); return 1; }
+        printf("\n\033[38;2;166;227;161m  [ YUKI SONAR ] Pinging %s \033[0m\n\n", args[1]);
+        char cmd[256]; snprintf(cmd, sizeof(cmd), "ping -c 1 -W 1 %s | grep time=", args[1]);
+        for(int i=0; i<15; i++) { 
+            FILE *fp = popen(cmd, "r"); char line[128];
+            if(fp && fgets(line, sizeof(line), fp)) {
+                char *time_ptr = strstr(line, "time=");
+                if(time_ptr) {
+                    double ms = atof(time_ptr + 5);
+                    printf("\033[38;2;137;180;250m%-8.2f ms\033[0m │ ", ms);
+                    int bars = (int)(ms / 5.0); if(bars > 40) bars = 40;
+                    for(int b=0; b<bars; b++) printf("\033[38;2;166;227;161m█\033[0m");
+                    printf("\n");
+                }
+            } else printf("\033[31mTIMEOUT\033[0m    │ \033[31mX\033[0m\n");
+            if(fp) { pclose(fp); }
+            usleep(500000); 
+        }
+        printf("\n"); return 1;
     }
 
     if(strcmp(args[0], "cd") == 0) {
