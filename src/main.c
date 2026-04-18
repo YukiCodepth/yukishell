@@ -148,7 +148,41 @@ int main(int argc, char **argv) {
     }
 
     if (!script_file) {
-        print_boot_screen();
+        
+    // --- V26.0: YUKISCRIPT ENGINE ---
+    if (argc > 1) {
+        FILE *fp = fopen(argv[1], "r");
+        if (!fp) {
+            printf("\033[31m[-] YukiScript Error: Cannot open file '%s'\033[0m\n", argv[1]);
+            return 1;
+        }
+        char line[1024];
+        while (fgets(line, sizeof(line), fp)) {
+            line[strcspn(line, "\n")] = 0; // Strip newline
+            if (line[0] == '\0' || line[0] == '#') continue; // Skip comments and empty lines
+            
+            // Simple space-based tokenizer for script execution
+            char *s_args[100]; int i = 0;
+            char *token = strtok(line, " \t");
+            while (token != NULL) { s_args[i++] = token; token = strtok(NULL, " \t"); }
+            s_args[i] = NULL;
+            
+            if (s_args[0] != NULL) {
+                if (!execute_builtin(s_args)) {
+                    pid_t pid = fork();
+                    if (pid == 0) {
+                        if (execvp(s_args[0], s_args) == -1) printf("\033[31m[-] Command not found: %s\033[0m\n", s_args[0]);
+                        exit(EXIT_FAILURE);
+                    } else if (pid > 0) waitpid(pid, NULL, 0);
+                }
+            }
+        }
+        fclose(fp);
+        return 0; // Exit cleanly after script finishes
+    }
+    // --- END YUKISCRIPT ENGINE ---
+
+    print_boot_screen();
     }
 
     while(1) {
