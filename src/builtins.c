@@ -1,5 +1,10 @@
 #define _GNU_SOURCE
 #include <sched.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <fcntl.h>
+#include <sys/select.h>
 #include <dirent.h>
 #include <sys/stat.h>
 
@@ -704,6 +709,41 @@ int execute_builtin(char **args) {
         }
         printf("\n");
         return 1;
+    }
+
+
+    // --- V26.0: NETWORK SENTINEL (xnet) ---
+    if(strcmp(args[0], "xnet") == 0) {
+        char *target = args[1] ? args[1] : "127.0.0.1";
+        printf("\n\033[38;2;137;180;250m  [ YUKI NETWORK SENTINEL ] Scanning %s \033[0m\n", target);
+        printf("\033[90m------------------------------------------------\033[0m\n");
+        int ports[] = {21, 22, 25, 53, 80, 443, 3306, 8080, 0};
+        char *services[] = {"FTP", "SSH", "SMTP", "DNS", "HTTP", "HTTPS", "MySQL", "HTTP-ALT"};
+        
+        for(int i=0; ports[i] != 0; i++) {
+            int sock = socket(AF_INET, SOCK_STREAM, 0);
+            struct sockaddr_in server;
+            server.sin_family = AF_INET;
+            server.sin_port = htons(ports[i]);
+            server.sin_addr.s_addr = inet_addr(target);
+            
+            fcntl(sock, F_SETFL, O_NONBLOCK); // Fast async connection
+            connect(sock, (struct sockaddr *)&server, sizeof(server));
+            
+            fd_set fdset; struct timeval tv;
+            FD_ZERO(&fdset); FD_SET(sock, &fdset);
+            tv.tv_sec = 0; tv.tv_usec = 100000; // 100ms timeout
+            
+            if (select(sock + 1, NULL, &fdset, NULL, &tv) == 1) {
+                int so_error; socklen_t len = sizeof(so_error);
+                getsockopt(sock, SOL_SOCKET, SO_ERROR, &so_error, &len);
+                if (so_error == 0) {
+                    printf("\033[38;2;166;227;161m  [OPEN]\033[0m Port %-5d \033[90m->\033[0m \033[1;36m%s\033[0m\n", ports[i], services[i]);
+                }
+            }
+            close(sock);
+        }
+        printf("\n"); return 1;
     }
 
     if(strcmp(args[0], "cd") == 0) {
