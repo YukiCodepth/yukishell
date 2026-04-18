@@ -1,5 +1,6 @@
 #include "logo.h"
 #include <unistd.h>
+#include <fcntl.h>
 #include "../include/yukishell.h"
 #include "../include/logo.h"
 #include <readline/readline.h>

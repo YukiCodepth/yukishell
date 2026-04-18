@@ -683,6 +683,29 @@ int execute_builtin(char **args) {
         printf("\n"); return 1;
     }
 
+
+    // --- V26.0: SHADOW MONITOR (jobs) ---
+    if(strcmp(args[0], "jobs") == 0) {
+        printf("\n\033[38;2;203;166;247m  ✧ [ YUKI SHADOW REALM ]\033[0m\n");
+        printf("\033[90m------------------------------------------------\033[0m\n");
+        // Grep the process tree for children of this shell
+        char cmd[128];
+        snprintf(cmd, sizeof(cmd), "ps -o pid,stat,comm --ppid %d | tail -n +2", getpid());
+        FILE *fp = popen(cmd, "r");
+        if (fp) {
+            char line[256];
+            int count = 0;
+            while(fgets(line, sizeof(line), fp)) {
+                printf("\033[38;2;166;227;161m  [⚙] \033[0m%s", line);
+                count++;
+            }
+            if (count == 0) printf("  \033[90mNo active shadow processes.\033[0m\n");
+            pclose(fp);
+        }
+        printf("\n");
+        return 1;
+    }
+
     if(strcmp(args[0], "cd") == 0) {
         if(args[1] != NULL && chdir(args[1]) != 0) perror("cd failed");
         return 1;
