@@ -1,8 +1,8 @@
-# YUKISHELL
+# E·MUX
 
 > An AI-Powered, Embedded-First Linux Terminal Environment
 
-YukiShell is a next-generation custom operating system shell built entirely in C. It is designed from the ground up to serve as the ultimate unified workspace for Embedded Systems engineers, IoT developers, and Edge AI workflows. 
+E·MUX is a next-generation custom operating system shell built entirely in C. It is designed from the ground up to serve as the ultimate unified workspace for Embedded Systems engineers, IoT developers, and Edge AI workflows. 
 
 Currently, developers must constantly switch between standard shells (Bash/Zsh), serial monitors (Minicom), hardware flashers, and AI interfaces. YukiShell merges the core of a POSIX-compliant Linux shell with native hardware debugging and local AI integration, acting as the foundation for a future custom operating system.
 
@@ -33,11 +33,11 @@ Compilation
 Clone the repository and build the executable using the provided build system:
 
 Bash
-git clone [https://github.com/yourusername/yukishell.git](https://github.com/yourusername/yukishell.git)
-cd yukishell
+git clone [https://github.com/yourusername/emux.git](https://github.com/yourusername/emux.git)
+cd emux
 make clean
 make
-./yukishell
+./emux
 MASTER ROADMAP
 Phase 1: Core Shell (Completed)
 Process management, pipes, redirection, background jobs, and modular architecture.

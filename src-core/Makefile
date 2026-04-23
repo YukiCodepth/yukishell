@@ -1,4 +1,4 @@
-# --- YukiShell V11 Makefile ---
+# --- E·MUX Makefile ---
 
 CC = gcc
 CFLAGS = -Wall -g -Iinclude
@@ -9,7 +9,7 @@ LDFLAGS = -lreadline
 # Source files (Added src/parser.c so the compiler can find your parsing logic!)
 SRCS = src/main.c src/builtins.c src/executor.c src/parser.c
 OBJS = $(SRCS:.c=.o)
-TARGET = yukishell
+TARGET = emux
 
 # Default build target
 all: $(TARGET)
