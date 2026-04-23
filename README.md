@@ -1,23 +1,23 @@
 <div align="center">
 
 ```text
-                    ..
-                  .8888.
-                 .888888.
-                .88888888.
-               .8888888888.
-              .888888888888.
-             .88888888888888.
-            .888888P"  "Y888888.
-           .88888P'      `Y88888.
-          .88888P          Y88888.
-         .88888P            Y88888.
-        .88888P    .8888.    Y88888.
-       .88888P    .888888.    Y88888.
-      .88888P    .88888888.    Y88888.
-     .88888P    .8888888888.    Y88888.
-    .88888P    .888888888888.    Y88888.
-   .88888P    .88888888888888.    Y88888.
+                              ..
+                            .8888.
+                           .888888.
+                          .88888888.
+                         .8888888888.
+                        .888888888888.
+                       .88888888888888.
+                      .888888P"  "Y888888.
+                     .88888P'      `Y88888.
+                    .88888P          Y88888.
+                   .88888P            Y88888.
+                  .88888P    .8888.    Y88888.
+                 .88888P    .888888.    Y88888.
+                .88888P    .88888888.    Y88888.
+               .88888P    .8888888888.    Y88888.
+              .88888P    .888888888888.    Y88888.
+             .88888P    .88888888888888.    Y88888.
 ```
 
 # YukiShell | Aegis-Edge Core (V26c)
@@ -39,11 +39,11 @@ Developed by **Yukino Labs**, it bridges the gap between low-level system execut
 
 ### Integrated LLM & Environment Fetch
 *Real-time querying and system hardware diagnostics.*
-![YukiShell Core UI](./Screenshot%20From%202026-04-23%2023-56-37.png)
+![YukiShell Core UI](./Screen1.png)
 
 ### Ghostmode (Ephemeral Namespace)
 *Root-level system override initiating an isolated, RAM-only `/tmp` container environment.*
-![YukiShell Ghostmode](./Screenshot%20From%202026-04-23%2023-58-04.png)
+![YukiShell Ghostmode](./Screen2.png)
 
 *(Note: Ensure the screenshots above are placed in the root directory of your repository with the exact filenames to render correctly).*
 
