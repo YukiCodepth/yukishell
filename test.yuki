@@ -1,0 +1,6 @@
+# Test Script
+echo 'YukiShell Automation is ONLINE'
+mkdir yuki_test_folder
+ls -l | grep yuki
+rm -r yuki_test_folder
+echo 'Script complete'

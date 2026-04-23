@@ -1,0 +1,5 @@
+*.o
+yukishell
+.env
+i2c_scan
+i2c_scan
