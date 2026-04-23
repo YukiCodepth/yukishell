@@ -16,11 +16,11 @@ Developed by **Yukino Labs**, it bridges the gap between low-level system execut
 
 ### Integrated LLM & Environment Fetch
 *Real-time querying and system hardware diagnostics.*
-![YukiShell Core UI](ai-mode.png)
+![YukiShell Core UI](assets/ai-mode.png)
 
 ### Ghostmode (Ephemeral Namespace)
 *Root-level system override initiating an isolated, RAM-only `/tmp` container environment.*
-![YukiShell Ghostmode](ghostmode.png)
+![YukiShell Ghostmode](assets/ghostmode.png)
 
 ---
 
