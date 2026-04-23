@@ -1,26 +1,4 @@
-<div align="center">
-
-```text
-                              ..
-                            .8888.
-                           .888888.
-                          .88888888.
-                         .8888888888.
-                        .888888888888.
-                       .88888888888888.
-                      .888888P"  "Y888888.
-                     .88888P'      `Y88888.
-                    .88888P          Y88888.
-                   .88888P            Y88888.
-                  .88888P    .8888.    Y88888.
-                 .88888P    .888888.    Y88888.
-                .88888P    .88888888.    Y88888.
-               .88888P    .8888888888.    Y88888.
-              .88888P    .888888888888.    Y88888.
-             .88888P    .88888888888888.    Y88888.
-```
-
-# YukiShell | Aegis-Edge Core (V26c)
+# YukiShell | (V26c)
 
 ![C](https://img.shields.io/badge/C-00599C?style=for-the-badge&logo=c&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
@@ -34,18 +12,15 @@ Developed by **Yukino Labs**, it bridges the gap between low-level system execut
 </div>
 
 ---
-
 ## 📸 System Interface
 
 ### Integrated LLM & Environment Fetch
 *Real-time querying and system hardware diagnostics.*
-![YukiShell Core UI](./Screen1.png)
+![YukiShell Core UI](ai-mode.png)
 
 ### Ghostmode (Ephemeral Namespace)
 *Root-level system override initiating an isolated, RAM-only `/tmp` container environment.*
-![YukiShell Ghostmode](./Screen2.png)
-
-*(Note: Ensure the screenshots above are placed in the root directory of your repository with the exact filenames to render correctly).*
+![YukiShell Ghostmode](ghostmode.png)
 
 ---
 
