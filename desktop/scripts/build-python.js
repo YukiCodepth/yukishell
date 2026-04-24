@@ -34,11 +34,17 @@ function hasImports(python, stdio = "ignore") {
   if (!fs.existsSync(target)) return false;
   const code = [
     "import sys",
+    "import importlib.util",
     `sys.path.insert(0, ${JSON.stringify(target)})`,
-    "mods=['dotenv','rich','langchain_google_genai','langchain_core','langchain_community','langgraph','cv2','serial','sounddevice']",
+    "mods=['dotenv','rich','langchain_google_genai','langchain_core','langchain_community','langgraph','serial']",
     "for m in mods:",
     "    __import__(m)",
-    "    print(m, 'ok')"
+    "    print(m, 'ok')",
+    "native_optional=['cv2','sounddevice']",
+    "for m in native_optional:",
+    "    if importlib.util.find_spec(m) is None:",
+    "        raise SystemExit(f'{m} missing')",
+    "    print(m, 'present')"
   ].join("\n");
   const result = childProcess.spawnSync(python, ["-c", code], { stdio });
   return result.status === 0;
