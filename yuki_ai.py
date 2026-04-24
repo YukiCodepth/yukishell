@@ -12,23 +12,68 @@ import json
 import urllib.error
 import urllib.request
 from collections import deque
-from dotenv import load_dotenv
+
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    def load_dotenv(*_args, **_kwargs):
+        return False
 
 try:
     from rich.console import Console
     from rich.markdown import Markdown
     console = Console()
 except ImportError:
-    console = None
+    class PlainConsole:
+        def print(self, *args, **kwargs):
+            end = kwargs.get("end", "\n")
+            text = " ".join(str(arg) for arg in args)
+            print(text, end=end)
+
+    def Markdown(content):
+        return content
+
+    console = PlainConsole()
 
 warnings.filterwarnings("ignore")
 load_dotenv(os.environ.get("YUKISHELL_ENV_FILE") or None)
 
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_community.tools.tavily_search import TavilySearchResults
-from langgraph.prebuilt import create_react_agent
-from langchain_core.tools import tool
+try:
+    from langchain_google_genai import ChatGoogleGenerativeAI
+    from langchain_core.messages import HumanMessage, SystemMessage
+    from langchain_community.tools.tavily_search import TavilySearchResults
+    from langgraph.prebuilt import create_react_agent
+    from langchain_core.tools import tool
+except ImportError as exc:
+    AI_IMPORT_ERROR = exc
+
+    def tool(func):
+        return func
+
+    class HumanMessage:
+        def __init__(self, content):
+            self.content = content
+
+    class SystemMessage(HumanMessage):
+        pass
+
+    class ChatGoogleGenerativeAI:
+        def __init__(self, *_args, **_kwargs):
+            raise RuntimeError(
+                "Yuki AI Python dependencies are missing. "
+                f"First missing import: {AI_IMPORT_ERROR}. "
+                "Rebuild the desktop Python bundle or install desktop/requirements-python.txt."
+            )
+
+    class TavilySearchResults:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def invoke(self, *_args, **_kwargs):
+            raise RuntimeError(f"Search dependencies are missing: {AI_IMPORT_ERROR}")
+
+    def create_react_agent(*_args, **_kwargs):
+        raise RuntimeError(f"Agent dependencies are missing: {AI_IMPORT_ERROR}")
 
 # --- Tools ---
 @tool
@@ -60,12 +105,10 @@ def terminal_executor(command: str) -> str:
     except Exception as e: return f"Error: {e}"
 
 def display_ai_response(content):
-    if console:
-        print("\n")
-        console.print("[bold magenta]━━━ Yuki AI Response ━━━[/bold magenta]")
-        console.print(Markdown(content))
-        console.print("[bold magenta]━━━━━━━━━━━━━━━━━━━━━━━━[/bold magenta]\n")
-    else: print(f"\n[Agent]: {content}\n")
+    print("\n")
+    console.print("[bold magenta]━━━ Yuki AI Response ━━━[/bold magenta]")
+    console.print(Markdown(content))
+    console.print("[bold magenta]━━━━━━━━━━━━━━━━━━━━━━━━[/bold magenta]\n")
 
 def print_permission_help(kind):
     app_name = "YukiShell"
@@ -83,7 +126,12 @@ def open_camera(index=0):
     os.environ.setdefault("QT_LOGGING_RULES", "*=false")
     os.environ.setdefault("OPENCV_LOG_LEVEL", "FATAL")
 
-    import cv2
+    try:
+        import cv2
+    except ImportError as exc:
+        console.print(f"[bold red]Camera mode needs OpenCV outside the desktop app:[/bold red] {exc}")
+        console.print("[dim]Use the YukiShell desktop app camera bridge, or install opencv-python for direct CLI camera mode.[/dim]")
+        return None, None
 
     backends = [cv2.CAP_AVFOUNDATION, cv2.CAP_ANY] if sys.platform == "darwin" else [cv2.CAP_ANY]
     for backend in backends:
