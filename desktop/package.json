@@ -1,0 +1,81 @@
+{
+  "name": "yukishell-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A cross-platform desktop terminal for YukiShell.",
+  "main": "main.js",
+  "author": "Yukino Labs",
+  "license": "MIT",
+  "scripts": {
+    "build:assets": "node scripts/generate-icons.js",
+    "build:core": "node scripts/build-core.js",
+    "build:python": "node scripts/build-python.js",
+    "prepare:resources": "node scripts/prepare-resources.js",
+    "dev": "npm run build:assets && npm run build:core && electron .",
+    "pack": "npm run build:assets && npm run build:core && npm run build:python && npm run prepare:resources && electron-builder --mac --dir",
+    "dist": "npm run build:assets && npm run build:core && npm run build:python && npm run prepare:resources && electron-builder",
+    "dist:linux": "npm run build:assets && npm run build:core && npm run build:python && npm run prepare:resources && electron-builder --linux",
+    "dist:mac": "npm run build:assets && npm run build:core && npm run build:python && npm run prepare:resources && electron-builder --mac",
+    "dist:win": "npm run build:assets && npm run build:python && npm run prepare:resources && electron-builder --win"
+  },
+  "dependencies": {
+    "@xterm/addon-fit": "latest",
+    "@xterm/xterm": "latest",
+    "node-pty": "latest"
+  },
+  "devDependencies": {
+    "electron": "latest",
+    "electron-builder": "latest"
+  },
+  "build": {
+    "appId": "labs.yukino.yukishell",
+    "productName": "YukiShell",
+    "asar": true,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/core",
+        "to": "core"
+      },
+      {
+        "from": "python",
+        "to": "python"
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "icon": "assets/icon.icns",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "extendInfo": {
+        "NSCameraUsageDescription": "YukiShell uses the camera for visual tutor and microchip scanning commands.",
+        "NSMicrophoneUsageDescription": "YukiShell uses the microphone for voice command transcription."
+      }
+    },
+    "linux": {
+      "category": "Development",
+      "icon": "assets/icon.png",
+      "target": [
+        "AppImage",
+        "deb"
+      ]
+    },
+    "win": {
+      "icon": "assets/icon.ico",
+      "target": [
+        "nsis"
+      ]
+    }
+  }
+}

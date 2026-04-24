@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YukiShell</title>
+    <link rel="stylesheet" href="../node_modules/@xterm/xterm/css/xterm.css">
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <main class="shell-window">
+      <header class="chrome">
+        <section class="brand">
+          <img src="../assets/icon.png" alt="" class="logo">
+          <div class="wordmark">
+            <strong>YukiShell</strong>
+            <span id="backendStatus"><i></i><b>Starting</b></span>
+          </div>
+        </section>
+
+        <nav class="actions" aria-label="Window actions">
+          <button class="icon-button" id="copyButton" title="Copy">
+            <span class="copy-icon"></span>
+          </button>
+          <button class="icon-button" id="pasteButton" title="Paste">
+            <span class="paste-icon"></span>
+          </button>
+          <button class="icon-button" id="clearButton" title="Clear">
+            <span class="clear-icon"></span>
+          </button>
+          <button class="icon-button" id="restartButton" title="Restart">
+            <span class="restart-icon"></span>
+          </button>
+        </nav>
+      </header>
+
+      <section class="terminal-wrap">
+        <div id="terminal"></div>
+      </section>
+    </main>
+
+    <script src="../node_modules/@xterm/xterm/lib/xterm.js"></script>
+    <script src="../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
+    <script src="./renderer.js"></script>
+  </body>
+</html>

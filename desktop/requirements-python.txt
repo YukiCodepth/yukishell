@@ -1,0 +1,9 @@
+python-dotenv
+rich
+langchain-google-genai
+langchain-community
+langgraph
+opencv-python
+pyserial
+tavily-python
+sounddevice

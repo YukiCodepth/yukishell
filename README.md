@@ -144,6 +144,38 @@ gcc src/*.c -Iinclude -o yukishell -lreadline
 
 ---
 
+## 🖥️ Desktop App Preview
+
+YukiShell now includes a minimal Electron desktop app in `desktop/`. It wraps the native C core in a polished PTY-backed terminal window with clean chrome, branded icons, and packaging scripts for macOS, Linux, and Windows.
+
+### Run the Desktop App
+```bash
+cd desktop
+npm install
+npm run dev
+```
+
+### Package Builds
+```bash
+npm run dist:mac
+npm run dist:linux
+npm run dist:win
+```
+
+macOS and Linux package the current POSIX core directly. Windows packaging ships the desktop UI and uses `yukishell.exe` when a native Windows core is provided; otherwise it attempts to use WSL and then falls back to the system shell. A full native Windows shell core requires a dedicated port away from POSIX-only APIs such as `fork`, `termios`, `readline`, `/proc`, and Linux namespaces.
+
+The desktop app does not bundle `.env` secrets into public release artifacts. Put API keys in one of these local-only files:
+
+```bash
+~/.yukishell/.env
+# or on macOS
+~/Library/Application Support/YukiShell/.env
+```
+
+GitHub release builds are handled by `.github/workflows/release.yml`. Push a tag such as `v26d.0` to build macOS, Linux, and Windows artifacts and attach them to a GitHub Release automatically.
+
+---
+
 ## 🤝 Contribution Guidelines
 
 YukiShell thrives on community input, specifically from developers in the hardware, embedded systems, and Linux kernel spaces. 

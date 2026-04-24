@@ -1,15 +1,130 @@
 #define _GNU_SOURCE
+#ifdef __linux__
 #include <sched.h>
+#include <sys/sysinfo.h>
+#endif
 #include <dirent.h>
 #include <sys/stat.h>
-
-
-#include <sys/sysinfo.h>
 #include <sys/select.h>
 #include <termios.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <time.h>
+
+#if defined(__APPLE__)
+#include <mach/mach.h>
+#include <sys/sysctl.h>
+#include <sys/time.h>
+#endif
+
+static long builtin_uptime_seconds(void) {
+#ifdef __linux__
+    struct sysinfo info;
+    if (sysinfo(&info) == 0) return info.uptime;
+#elif defined(__APPLE__)
+    struct timeval boot_time;
+    size_t size = sizeof(boot_time);
+    int mib[2] = {CTL_KERN, KERN_BOOTTIME};
+    if (sysctl(mib, 2, &boot_time, &size, NULL, 0) == 0 && boot_time.tv_sec > 0) {
+        return time(NULL) - boot_time.tv_sec;
+    }
+#endif
+    return 0;
+}
+
+static void builtin_memory_mb(long *total_mb, long *free_mb) {
+    *total_mb = 0;
+    *free_mb = 0;
+
+#ifdef __linux__
+    struct sysinfo info;
+    if (sysinfo(&info) == 0) {
+        *total_mb = (long)((info.totalram * info.mem_unit) / (1024 * 1024));
+        *free_mb = (long)((info.freeram * info.mem_unit) / (1024 * 1024));
+    }
+#elif defined(__APPLE__)
+    int64_t mem_size = 0;
+    size_t size = sizeof(mem_size);
+    if (sysctlbyname("hw.memsize", &mem_size, &size, NULL, 0) == 0) {
+        *total_mb = (long)(mem_size / (1024 * 1024));
+    }
+
+    mach_msg_type_number_t count = HOST_VM_INFO64_COUNT;
+    vm_statistics64_data_t vm_stats;
+    if (host_statistics64(mach_host_self(), HOST_VM_INFO64, (host_info64_t)&vm_stats, &count) == KERN_SUCCESS) {
+        vm_size_t page_size = 0;
+        host_page_size(mach_host_self(), &page_size);
+        uint64_t free_pages = vm_stats.free_count + vm_stats.inactive_count;
+        *free_mb = (long)((free_pages * (uint64_t)page_size) / (1024 * 1024));
+    }
+#endif
+}
+
+static void builtin_load_average(double loads[3]) {
+    loads[0] = 0.0;
+    loads[1] = 0.0;
+    loads[2] = 0.0;
+    getloadavg(loads, 3);
+}
+
+static void core_resource_path(char *out, size_t out_size, const char *name) {
+    const char *core_dir = getenv("YUKISHELL_CORE_DIR");
+    if (core_dir && core_dir[0] != '\0') {
+        snprintf(out, out_size, "%s/%s", core_dir, name);
+    } else {
+        snprintf(out, out_size, "%s", name);
+    }
+}
+
+static void build_python_command(char *out, size_t out_size, const char *script_path) {
+    char venv_python[1024];
+    char local_pythonpath[1024] = {0};
+    const char *python_bin = getenv("YUKISHELL_PYTHON_BIN");
+    const char *pythonpath = getenv("YUKISHELL_PYTHONPATH");
+    const char *resolved_python = (python_bin && python_bin[0] != '\0') ? python_bin : "python3";
+    core_resource_path(venv_python, sizeof(venv_python), "venv/bin/python");
+
+    if ((!pythonpath || pythonpath[0] == '\0') && access("desktop/python", F_OK) == 0) {
+        snprintf(local_pythonpath, sizeof(local_pythonpath), "%s", "desktop/python");
+        pythonpath = local_pythonpath;
+    }
+
+#if defined(__APPLE__)
+    if (!python_bin || python_bin[0] == '\0') {
+        if (access("/opt/homebrew/bin/python3.12", X_OK) == 0) resolved_python = "/opt/homebrew/bin/python3.12";
+        else if (access("/opt/homebrew/bin/python3.11", X_OK) == 0) resolved_python = "/opt/homebrew/bin/python3.11";
+        else if (access("/usr/local/bin/python3.12", X_OK) == 0) resolved_python = "/usr/local/bin/python3.12";
+        else if (access("/usr/local/bin/python3.11", X_OK) == 0) resolved_python = "/usr/local/bin/python3.11";
+    }
+#endif
+
+    if (pythonpath && pythonpath[0] != '\0') {
+        snprintf(out, out_size, "PYTHONPATH=\"%s${PYTHONPATH:+:$PYTHONPATH}\" \"%s\" \"%s\" ", pythonpath, resolved_python, script_path);
+    }
+#if !defined(__APPLE__)
+    else if (access(venv_python, X_OK) == 0) {
+        snprintf(out, out_size, "\"%s\" \"%s\" ", venv_python, script_path);
+    }
+#endif
+    else {
+        snprintf(out, out_size, "\"%s\" \"%s\" ", resolved_python, script_path);
+    }
+}
+
+static void append_shell_quoted(char *out, size_t out_size, const char *value) {
+    strncat(out, "'", out_size - strlen(out) - 1);
+    for (const char *p = value; *p != '\0'; p++) {
+        if (*p == '\'') {
+            strncat(out, "'\\''", out_size - strlen(out) - 1);
+        } else {
+            char ch[2] = {*p, '\0'};
+            strncat(out, ch, out_size - strlen(out) - 1);
+        }
+    }
+    strncat(out, "'", out_size - strlen(out) - 1);
+}
 
 int kbhit_boot() {
     struct timeval tv = { 0L, 0L };
@@ -29,14 +144,13 @@ void live_fastfetch_boot() {
     printf("\033[2J\033[?25l"); // Clear screen, hide cursor
     
     while(!kbhit_boot()) {
-        struct sysinfo info;
-        sysinfo(&info);
-        long total_ram = (info.totalram * info.mem_unit) / (1024 * 1024);
-        long free_ram = (info.freeram * info.mem_unit) / (1024 * 1024);
+        long total_ram = 0, free_ram = 0;
+        builtin_memory_mb(&total_ram, &free_ram);
         long used_ram = total_ram - free_ram;
-        long h = info.uptime / 3600;
-        long m = (info.uptime % 3600) / 60;
-        long s = info.uptime % 60;
+        long uptime = builtin_uptime_seconds();
+        long h = uptime / 3600;
+        long m = (uptime % 3600) / 60;
+        long s = uptime % 60;
 
         printf("\033[H\n\n"); // Move to top left, add padding
         
@@ -97,13 +211,13 @@ void print_help() {
     printf("\033[38;2;180;190;254m┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫\033[0m\n");
     printf("\033[38;2;180;190;254m┃\033[0m \033[1;37m🧠 AI NEURAL LINK (ask)\033[0m                                                      \033[38;2;180;190;254m┃\033[0m\n");
     printf("\033[38;2;180;190;254m┃\033[0m  \033[38;2;245;194;231m%-18s\033[0m \033[90m|\033[0m \033[38;2;205;214;244m%-52s\033[0m \033[38;2;180;190;254m┃\033[0m\n", "ask \"prompt\"", "Direct link to Gemini for ECE/Coding assistance");
-    printf("\033[38;2;180;190;254m┃\033[0m  \033[38;2;245;194;231m%-18s\033[0m \033[90m|\033[0m \033[38;2;205;214;244m%-52s\033[0m \033[38;2;180;190;254m┃\033[0m\n", "ask --plot", "Oscilloscope: Real-time ANSI hardware graphing");
+    printf("\033[38;2;180;190;254m┃\033[0m  \033[38;2;245;194;231m%-18s\033[0m \033[90m|\033[0m \033[38;2;205;214;244m%-52s\033[0m \033[38;2;180;190;254m┃\033[0m\n", "ask --plot [port]", "Oscilloscope: Real-time ANSI hardware graphing");
     printf("\033[38;2;180;190;254m┃\033[0m  \033[38;2;245;194;231m%-18s\033[0m \033[90m|\033[0m \033[38;2;205;214;244m%-52s\033[0m \033[38;2;180;190;254m┃\033[0m\n", "ask --live", "Visual Tutor: AI-assisted camera object analysis");
     printf("\033[38;2;180;190;254m┃\033[0m  \033[38;2;245;194;231m%-18s\033[0m \033[90m|\033[0m \033[38;2;205;214;244m%-52s\033[0m \033[38;2;180;190;254m┃\033[0m\n", "ask --chip", "Silicon Scanner: Automated IC datasheet retrieval");
     printf("\033[38;2;180;190;254m┃\033[0m  \033[38;2;245;194;231m%-18s\033[0m \033[90m|\033[0m \033[38;2;205;214;244m%-52s\033[0m \033[38;2;180;190;254m┃\033[0m\n", "ask --voice", "Audio: Voice-to-Command acoustic processing");
     printf("\033[38;2;180;190;254m┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫\033[0m\n");
     printf("\033[38;2;180;190;254m┃\033[0m \033[1;33m💡 PRO-TIPS FOR v26c\033[0m                                                         \033[38;2;180;190;254m┃\033[0m\n");
-    printf("\033[38;2;180;190;254m┃\033[0m  \033[90m•\033[0m \033[1;36mPlotting:\033[0m Verify baud rate in yuki_ai.py matches Arduino before \033[1;37mask --plot\033[0m \033[38;2;180;190;254m┃\033[0m\n");
+    printf("\033[38;2;180;190;254m┃\033[0m  \033[90m•\033[0m \033[1;36mPlotting:\033[0m Use \033[1;37mask --plot /dev/tty.usbserial-XXXX\033[0m for hardware graphs.    \033[38;2;180;190;254m┃\033[0m\n");
     printf("\033[38;2;180;190;254m┃\033[0m  \033[90m•\033[0m \033[1;36mDetaching:\033[0m Use \033[1;37mxcat log.txt &\033[0m to read heavy files async.                 \033[38;2;180;190;254m┃\033[0m\n");
     printf("\033[38;2;180;190;254m┃\033[0m  \033[90m•\033[0m \033[1;36mSentinel:\033[0m Run \033[1;37mxnet 192.168.1.1\033[0m to audit local devices.                    \033[38;2;180;190;254m┃\033[0m\n");
     printf("\033[38;2;180;190;254m╰━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╯\033[0m\n\n");
@@ -116,18 +230,33 @@ int execute_builtin(char **args) {
         return 1;
     }
 
-    if (strcmp(args[0], "net") == 0) {
-        if (args[1] != NULL && strcmp(args[1], "scan") == 0) {
-            system("python3 yuki_net.py");
+    if (strcmp(args[0], "net") == 0 || strcmp(args[0], "xnet") == 0) {
+        int is_xnet = strcmp(args[0], "xnet") == 0;
+        if (is_xnet || (args[1] != NULL && strcmp(args[1], "scan") == 0)) {
+            char script_path[1024];
+            char py_cmd[2048];
+            char *target = is_xnet ? args[1] : args[2];
+
+            core_resource_path(script_path, sizeof(script_path), "yuki_net.py");
+            build_python_command(py_cmd, sizeof(py_cmd), script_path);
+            if (target != NULL) {
+                strncat(py_cmd, " ", sizeof(py_cmd) - strlen(py_cmd) - 1);
+                append_shell_quoted(py_cmd, sizeof(py_cmd), target);
+            }
+            system(py_cmd);
         } else {
-            printf("\033[33mUsage: net scan\033[0m\n");
+            printf("\033[33mUsage: xnet [host|subnet]  or  net scan [subnet]\033[0m\n");
         }
         return 1;
     }
 
     if (strcmp(args[0], "i2c") == 0) {
         if (args[1] != NULL && strcmp(args[1], "scan") == 0) {
-            int status = system("./i2c_scan");
+            char scan_path[1024];
+            char scan_cmd[1200];
+            core_resource_path(scan_path, sizeof(scan_path), "i2c_scan");
+            snprintf(scan_cmd, sizeof(scan_cmd), "\"%s\"", scan_path);
+            int status = system(scan_cmd);
             if (status == -1) {
                 printf("\033[31m[!] YukiShell Error: i2c_scan binary not found. Did you compile it?\033[0m\n");
             }
@@ -163,29 +292,42 @@ int execute_builtin(char **args) {
             strncpy(model_flag, args[1] + 2, sizeof(model_flag) - 1); 
             prompt_idx = 2; 
             
-            // V16: Allow --live to run without a text prompt
-            if (args[2] == NULL && strcmp(model_flag, "live") != 0) {
+            if (args[2] == NULL &&
+                strcmp(model_flag, "live") != 0 &&
+                strcmp(model_flag, "chip") != 0 &&
+                strcmp(model_flag, "voice") != 0 &&
+                strcmp(model_flag, "plot") != 0) {
                 printf("\x1b[31mError: Please provide a prompt after the flag.\x1b[0m\n");
                 return 1;
             }
         }
 
-        char py_cmd[2048] = "./venv/bin/python yuki_ai.py ";
-        strncat(py_cmd, model_flag, sizeof(py_cmd) - strlen(py_cmd) - 1);
-        strncat(py_cmd, " \"", sizeof(py_cmd) - strlen(py_cmd) - 1);
+        char script_path[1024];
+        char py_cmd[4096];
+        core_resource_path(script_path, sizeof(script_path), "yuki_ai.py");
+        build_python_command(py_cmd, sizeof(py_cmd), script_path);
+        append_shell_quoted(py_cmd, sizeof(py_cmd), model_flag);
+        strncat(py_cmd, " ", sizeof(py_cmd) - strlen(py_cmd) - 1);
 
         // Safely append arguments if they exist
         if (args[prompt_idx] != NULL) {
+            char prompt[2048] = {0};
             for (int i = prompt_idx; args[i] != NULL; i++) {
-                strncat(py_cmd, args[i], sizeof(py_cmd) - strlen(py_cmd) - 1);
+                strncat(prompt, args[i], sizeof(prompt) - strlen(prompt) - 1);
                 if (args[i+1] != NULL) {
-                    strncat(py_cmd, " ", sizeof(py_cmd) - strlen(py_cmd) - 1);
+                    strncat(prompt, " ", sizeof(prompt) - strlen(prompt) - 1);
                 }
             }
+            append_shell_quoted(py_cmd, sizeof(py_cmd), prompt);
+        } else if (strcmp(model_flag, "plot") == 0) {
+            append_shell_quoted(py_cmd, sizeof(py_cmd), "auto");
+        } else if (strcmp(model_flag, "voice") == 0) {
+            append_shell_quoted(py_cmd, sizeof(py_cmd), "VoiceCommand");
+        } else if (strcmp(model_flag, "chip") == 0) {
+            append_shell_quoted(py_cmd, sizeof(py_cmd), "ChipScan");
         } else {
-            strncat(py_cmd, "LiveStreamInit", sizeof(py_cmd) - strlen(py_cmd) - 1);
+            append_shell_quoted(py_cmd, sizeof(py_cmd), "LiveStreamInit");
         }
-        strncat(py_cmd, "\"", sizeof(py_cmd) - strlen(py_cmd) - 1);
 
         if (strcmp(model_flag, "auto") == 0) {
             printf("\n\x1b[1m\x1b[31m[ ⚠️ SYSTEM OVERRIDE: GIVING AI RAW TERMINAL ACCESS ]\x1b[0m\n");
@@ -273,6 +415,7 @@ int execute_builtin(char **args) {
     // --- Network Scanner ---
     if(strcmp(args[0], "netscan") == 0) {
         printf("\n\033[38;2;166;227;161m\x1b[1m🌐 YUKI NETWORK SCANNER\x1b[0m\n");
+#ifdef __linux__
         FILE *fp = fopen("/proc/net/arp", "r");
         if (fp == NULL) { return 1; }
         char line[256], ip[32], hw_type[32], flags[32], mac[32], mask[32], dev[32];
@@ -288,6 +431,26 @@ int execute_builtin(char **args) {
         }
         fclose(fp);
         printf("\n\x1b[32m[+] Devices Detected: %d\x1b[0m\n\n", count);
+#elif defined(__APPLE__)
+        FILE *fp = popen("arp -a 2>/dev/null", "r");
+        if (fp == NULL) { return 1; }
+        char line[256];
+        int count = 0;
+        printf("\x1b[32m%-32s %-20s\x1b[0m\n", "HOST / IP", "MAC ADDRESS");
+        printf("------------------------------------------------------\n");
+        while (fgets(line, sizeof(line), fp)) {
+            char host[128] = {0}, ip[64] = {0}, mac[32] = {0};
+            if (sscanf(line, "%127s (%63[^)]) at %31s", host, ip, mac) == 3 &&
+                strcmp(mac, "(incomplete)") != 0) {
+                printf("%-32s %-20s\n", ip, mac);
+                count++;
+            }
+        }
+        pclose(fp);
+        printf("\n\x1b[32m[+] Devices Detected: %d\x1b[0m\n\n", count);
+#else
+        printf("\033[31m[-] Network scanner is not supported on this OS yet.\033[0m\n");
+#endif
         return 1;
     }
 
@@ -302,34 +465,20 @@ int execute_builtin(char **args) {
                 printf("\033[38;2;180;190;254m\x1b[1m┃\x1b[0m                 \033[38;2;245;194;231mYUKI LIVE TELEMETRY\033[0m                        \033[38;2;180;190;254m\x1b[1m┃\x1b[0m\n");
                 printf("\033[38;2;180;190;254m\x1b[1m┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫\x1b[0m\n");
 
-                FILE *load_fp = fopen("/proc/loadavg", "r");
-                if (load_fp) {
-                    double load1, load5, load15;
-                    fscanf(load_fp, "%lf %lf %lf", &load1, &load5, &load15);
-                    printf("\033[38;2;180;190;254m\x1b[1m┃\x1b[0m \033[38;2;137;180;250mCPU Load (1m, 5m, 15m):\033[0m %.2f, %.2f, %.2f\n", load1, load5, load15);
-                    fclose(load_fp);
-                }
+                double loads[3];
+                builtin_load_average(loads);
+                printf("\033[38;2;180;190;254m\x1b[1m┃\x1b[0m \033[38;2;137;180;250mCPU Load (1m, 5m, 15m):\033[0m %.2f, %.2f, %.2f\n", loads[0], loads[1], loads[2]);
 
-                FILE *mem_fp = fopen("/proc/meminfo", "r");
-                if (mem_fp) {
-                    char label[32];
-                    long total_mem = 0, free_mem = 0;
-                    while (fscanf(mem_fp, "%31s %ld kB", label, &total_mem) != EOF) {
-                        if (strcmp(label, "MemTotal:") == 0) break;
-                    }
-                    rewind(mem_fp);
-                    while (fscanf(mem_fp, "%31s %ld kB", label, &free_mem) != EOF) {
-                        if (strcmp(label, "MemAvailable:") == 0) break;
-                    }
-                    fclose(mem_fp);
-
+                long total_mem = 0, free_mem = 0;
+                builtin_memory_mb(&total_mem, &free_mem);
+                if (total_mem > 0) {
                     long used_mem = total_mem - free_mem;
-                    double used_gb = (double)used_mem / (1024.0 * 1024.0);
-                    double total_gb = (double)total_mem / (1024.0 * 1024.0);
-                    int mem_percent = (total_mem > 0) ? (int)((used_mem * 100.0) / total_mem) : 0;
+                    double used_gb = (double)used_mem / 1024.0;
+                    double total_gb = (double)total_mem / 1024.0;
+                    int mem_percent = (int)((used_mem * 100.0) / total_mem);
 
                     printf("\033[38;2;180;190;254m\x1b[1m┃\x1b[0m \033[38;2;166;227;161mMemory Usage:\033[0m %.2f GB / %.2f GB [%d%%]\n", used_gb, total_gb, mem_percent);
-                    
+
                     printf("\033[38;2;180;190;254m\x1b[1m┃\x1b[0m \033[38;2;243;139;168mRAM:\033[0m [");
                     int bar_width = 40;
                     int filled = (mem_percent * bar_width) / 100;
@@ -537,6 +686,7 @@ int execute_builtin(char **args) {
 
     // --- V22.0: HARDWARE WATCHDOG ---
     if(strcmp(args[0], "lsdev") == 0) {
+#ifdef __linux__
         DIR *d = opendir("/sys/bus/usb/devices");
         if (d) {
             struct dirent *dir;
@@ -573,12 +723,29 @@ int execute_builtin(char **args) {
         } else {
             printf("\033[31m[-] Sysfs not accessible. Cannot map hardware.\033[0m\n");
         }
+#elif defined(__APPLE__)
+        FILE *fp = popen("system_profiler SPUSBDataType 2>/dev/null | awk '/Product ID|Vendor ID|Manufacturer|^[[:space:]]{8}[^:]+:/{print}'", "r");
+        if (fp) {
+            char line[256];
+            printf("\n\033[38;2;166;227;161m\x1b[1m[ YUKI HARDWARE WATCHDOG ]\033[0m Scanning USB devices...\n\n");
+            while (fgets(line, sizeof(line), fp)) {
+                printf("%s", line);
+            }
+            pclose(fp);
+            printf("\n");
+        } else {
+            printf("\033[31m[-] Unable to query USB devices.\033[0m\n");
+        }
+#else
+        printf("\033[31m[-] USB device scanning is not supported on this OS yet.\033[0m\n");
+#endif
         return 1;
     }
 
 
     // --- V23.0: GHOST MODE (Ephemeral Sandboxing) ---
     if(strcmp(args[0], "ghostmode") == 0) {
+#ifdef __linux__
         printf("\n\033[38;2;203;166;247m  ✧ [ GHOST VORTEX ] Initiating Ephemeral Namespace...\033[0m\n");
         printf("\033[90mRipping namespace parameters...\033[0m\n");
         
@@ -602,6 +769,9 @@ int execute_builtin(char **args) {
         // Clean up the timeline when they type exit
         system("umount -l /tmp");
         printf("\n\033[1;35m[ 👻 GHOST MODE TERMINATED ]\033[0m Timeline restored. Traces erased.\n\n");
+#else
+        printf("\033[31m[-] Ghost Mode uses Linux namespaces and is not available on this OS.\033[0m\n");
+#endif
         return 1;
     }
 

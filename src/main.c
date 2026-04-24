@@ -99,7 +99,7 @@ void format_directory(char *cwd) {
 // V15.0: Added "dash" to autocomplete
 char *command_generator(const char *text, int state) {
     static int list_index, len;
-    char *commands[] = {"help", "exit", "cd", "netscan", "serial", "neofetch", "ask", "dash", NULL};
+    char *commands[] = {"help", "exit", "cd", "xls", "xcat", "xnet", "net", "netscan", "serial", "neofetch", "ask", "dash", "taskmgr", "vault", "hexview", "lsdev", "ghostmode", "yql", NULL};
 
     if (!state) { list_index = 0; len = strlen(text); }
 

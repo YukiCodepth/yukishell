@@ -6,6 +6,8 @@ import time
 import threading
 import base64
 import math
+import tempfile
+import wave
 from collections import deque
 from dotenv import load_dotenv
 
@@ -17,7 +19,7 @@ except ImportError:
     console = None
 
 warnings.filterwarnings("ignore")
-load_dotenv()
+load_dotenv(os.environ.get("YUKISHELL_ENV_FILE") or None)
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -62,6 +64,90 @@ def display_ai_response(content):
         console.print("[bold magenta]━━━━━━━━━━━━━━━━━━━━━━━━[/bold magenta]\n")
     else: print(f"\n[Agent]: {content}\n")
 
+def print_permission_help(kind):
+    app_name = "YukiShell"
+    if sys.platform == "darwin":
+        console.print(
+            f"[bold red]macOS has not granted {app_name} {kind} access yet.[/bold red]\n"
+            f"[dim]Open System Settings → Privacy & Security → {kind.capitalize()} → enable {app_name}, "
+            "then quit and reopen the app.[/dim]"
+        )
+    else:
+        console.print(f"[bold red]Could not access the {kind}. Check device permissions and drivers.[/bold red]")
+
+def open_camera(index=0):
+    os.environ.setdefault("OPENCV_AVFOUNDATION_SKIP_AUTH", "0")
+    os.environ.setdefault("QT_LOGGING_RULES", "*=false")
+    os.environ.setdefault("OPENCV_LOG_LEVEL", "FATAL")
+
+    import cv2
+
+    backends = [cv2.CAP_AVFOUNDATION, cv2.CAP_ANY] if sys.platform == "darwin" else [cv2.CAP_ANY]
+    for backend in backends:
+        cap = cv2.VideoCapture(index, backend)
+        if cap.isOpened():
+            return cap, cv2
+        cap.release()
+
+    print_permission_help("camera")
+    return None, cv2
+
+def detect_serial_port():
+    try:
+        from serial.tools import list_ports
+        ports = list(list_ports.comports())
+    except Exception:
+        ports = []
+
+    hardware_ports = [
+        port for port in ports
+        if any(token in port.device.lower() for token in ("usb", "acm", "wch", "slab", "modem", "serial"))
+        and "bluetooth" not in port.device.lower()
+        and "debug-console" not in port.device.lower()
+    ]
+
+    if not hardware_ports:
+        console.print("[bold yellow]No serial devices were detected.[/bold yellow]")
+        console.print("[dim]Connect an Arduino/ESP32/STM32 board and retry, or run ask --plot /dev/tty.usbserial-XXXX.[/dim]")
+        if ports:
+            console.print("\n[dim]Ignored non-board ports:[/dim]")
+            for port in ports:
+                console.print(f"  [dim]{port.device} {port.description}[/dim]")
+        return None
+
+    console.print("[bold cyan]Detected serial devices:[/bold cyan]")
+    for index, port in enumerate(hardware_ports, start=1):
+        console.print(f"  [green]{index}.[/green] {port.device} [dim]{port.description}[/dim]")
+    console.print(f"\n[dim]Using {hardware_ports[0].device}. Pass a different port as: ask --plot <port>[/dim]\n")
+    return hardware_ports[0].device
+
+def record_voice_to_wav(seconds=5, sample_rate=16000):
+    try:
+        import numpy as np
+        import sounddevice as sd
+    except Exception as exc:
+        console.print(f"[bold red]Voice mode needs the sounddevice Python package: {exc}[/bold red]")
+        return None
+
+    console.print(f"\n[bold green]🎙️ Yuki Voice Link Initiated.[/bold green]")
+    console.print(f"[dim]Recording for {seconds} seconds. Speak clearly...[/dim]")
+
+    try:
+        audio = sd.rec(int(seconds * sample_rate), samplerate=sample_rate, channels=1, dtype="int16")
+        sd.wait()
+    except Exception:
+        print_permission_help("microphone")
+        return None
+
+    fd, path = tempfile.mkstemp(prefix="yuki-voice-", suffix=".wav")
+    os.close(fd)
+    with wave.open(path, "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(sample_rate)
+        wav.writeframes(np.asarray(audio, dtype="int16").tobytes())
+    return path
+
 def main():
     if len(sys.argv) < 3: sys.exit(1)
     provider = sys.argv[1].lower()
@@ -71,17 +157,11 @@ def main():
     try:
         # --- V17.1: AUTO-DATASHEET RETRIEVER ---
         if provider == "chip":
-            import cv2
-            
             console.print("\n[bold yellow]🔍 Yuki Datasheet Scanner Initiated.[/bold yellow]")
             console.print("[dim]Hold an IC/Microchip to the camera. Ensure the laser-etched text is well lit.[/dim]")
-            
-            os.environ["QT_LOGGING_RULES"] = "*=false" 
-            os.environ["OPENCV_LOG_LEVEL"] = "FATAL"
-            
-            cap = cv2.VideoCapture(0)
-            if not cap.isOpened():
-                console.print("[bold red]Fatal: Could not access the webcam.[/bold red]")
+
+            cap, cv2 = open_camera(0)
+            if cap is None:
                 sys.exit(1)
 
             frame_to_send = None
@@ -140,6 +220,10 @@ def main():
         elif provider == "plot":
             import serial
             port = prompt.strip()
+            if port.lower() in ("", "auto", "livestreaminit"):
+                port = detect_serial_port()
+                if not port:
+                    return
             baud_rate = 115200
             width = 70
             height = 15
@@ -184,19 +268,16 @@ def main():
 
         # --- V16.0: INTERACTIVE VISUAL TUTOR ---
         elif provider == "live":
-            import cv2
             console.print("\n[bold green]🟢 Yuki Visual Tutor Initiated.[/bold green]")
-            os.environ["QT_LOGGING_RULES"] = "*=false" 
-            os.environ["OPENCV_LOG_LEVEL"] = "FATAL"
+            cap, cv2 = open_camera(0)
+            if cap is None:
+                sys.exit(1)
+
             frame_lock = threading.Lock()
             latest_frame = [None]
             running = [True]
 
             def capture_loop():
-                cap = cv2.VideoCapture(0)
-                if not cap.isOpened():
-                    running[0] = False
-                    return
                 while running[0]:
                     ret, frame = cap.read()
                     if ret:
@@ -208,12 +289,17 @@ def main():
                     if cv2.waitKey(1) & 0xFF in [27, ord('q')]:
                         running[0] = False
                         break
-                cap.release()
-                cv2.destroyAllWindows()
+                try:
+                    cap.release()
+                    cv2.destroyAllWindows()
+                except Exception:
+                    pass
 
             threading.Thread(target=capture_loop, daemon=True).start()
             time.sleep(1.5) 
-            if not running[0]: sys.exit(1)
+            if not running[0] or latest_frame[0] is None:
+                print_permission_help("camera")
+                sys.exit(1)
 
             llm = ChatGoogleGenerativeAI(model=gemini_version, temperature=0.6)
             chat_history = [SystemMessage(content="You are Yuki, an interactive visual tutor.")]
@@ -225,7 +311,11 @@ def main():
                         running[0] = False
                         break
                     if not user_input.strip(): continue
-                    with frame_lock: frame_to_analyze = latest_frame[0].copy()
+                    with frame_lock:
+                        if latest_frame[0] is None:
+                            console.print("[bold yellow]Camera frame is not ready yet. Try again in a second.[/bold yellow]")
+                            continue
+                        frame_to_analyze = latest_frame[0].copy()
                     _, buffer = cv2.imencode('.jpg', frame_to_analyze)
                     img_b64 = base64.b64encode(buffer).decode('utf-8')
                     user_msg = HumanMessage(content=[{"type": "text", "text": user_input}, {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}}])
@@ -235,6 +325,45 @@ def main():
                     if len(chat_history) > 7: chat_history = [chat_history[0]] + chat_history[-6:]
             except KeyboardInterrupt: running[0] = False
             finally: os._exit(0) 
+
+        # --- V26d: VOICE LINK ---
+        elif provider == "voice":
+            duration = 5
+            if prompt.strip().isdigit():
+                duration = max(2, min(15, int(prompt.strip())))
+
+            wav_path = record_voice_to_wav(duration)
+            if not wav_path:
+                return
+
+            try:
+                with open(wav_path, "rb") as audio_file:
+                    audio_b64 = base64.b64encode(audio_file.read()).decode("utf-8")
+            finally:
+                try:
+                    os.remove(wav_path)
+                except OSError:
+                    pass
+
+            llm = ChatGoogleGenerativeAI(model=gemini_version, temperature=0.2)
+            instruction = (
+                "Transcribe the user's voice. If it sounds like a terminal command, return the command and a one-line explanation. "
+                "If it sounds like a normal question, answer it directly and concisely."
+            )
+            user_msg = HumanMessage(content=[
+                {"type": "text", "text": instruction},
+                {
+                    "type": "file",
+                    "source_type": "base64",
+                    "mime_type": "audio/wav",
+                    "data": audio_b64,
+                },
+            ])
+
+            console.print("[dim magenta]⚡ Transcribing voice through Gemini...[/dim magenta]", end="\r")
+            response = llm.invoke([user_msg])
+            print("\033[K", end="")
+            display_ai_response(response.content)
 
         # --- OTHER MODES ---
         elif provider == "auto": pass

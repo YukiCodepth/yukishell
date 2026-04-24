@@ -3,3 +3,14 @@ yukishell
 .env
 i2c_scan
 i2c_scan
+.DS_Store
+venv/
+node_modules/
+desktop/node_modules/
+desktop/release/
+desktop/dist/
+desktop/resources/
+desktop/assets/icon.iconset/
+desktop/python/
+yuki_test_input.txt
+__pycache__/
