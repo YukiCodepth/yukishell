@@ -1,13 +1,24 @@
-const { app, BrowserWindow, ipcMain, shell, systemPreferences } = require("electron");
+const { app, BrowserWindow, ipcMain, shell, systemPreferences, session } = require("electron");
 const path = require("path");
 const fs = require("fs");
 const os = require("os");
+const crypto = require("crypto");
+const http = require("http");
 const childProcess = require("child_process");
 const pty = require("node-pty");
 
 const isDev = !app.isPackaged;
 const repoRoot = path.resolve(__dirname, "..");
 const activeSessions = new Map();
+const cameraBridge = {
+  server: null,
+  url: "",
+  token: crypto.randomBytes(24).toString("hex"),
+  latestFrame: "",
+  updatedAt: 0,
+  status: "starting",
+  error: ""
+};
 
 function corePath() {
   if (isDev) return path.join(repoRoot, process.platform === "win32" ? "yukishell.exe" : "yukishell");
@@ -158,6 +169,67 @@ function createWindow() {
   }
 }
 
+function sendJson(res, statusCode, payload) {
+  const body = JSON.stringify(payload);
+  res.writeHead(statusCode, {
+    "Content-Type": "application/json",
+    "Content-Length": Buffer.byteLength(body),
+    "Cache-Control": "no-store"
+  });
+  res.end(body);
+}
+
+function startCameraBridge() {
+  if (cameraBridge.server) return Promise.resolve();
+
+  return new Promise((resolve) => {
+    cameraBridge.server = http.createServer((req, res) => {
+      const requestUrl = new URL(req.url, "http://127.0.0.1");
+
+      if (requestUrl.searchParams.get("token") !== cameraBridge.token) {
+        sendJson(res, 403, { ok: false, error: "Camera bridge token rejected." });
+        return;
+      }
+
+      if (requestUrl.pathname === "/health") {
+        sendJson(res, 200, {
+          ok: cameraBridge.status === "ready",
+          status: cameraBridge.status,
+          error: cameraBridge.error,
+          updatedAt: cameraBridge.updatedAt
+        });
+        return;
+      }
+
+      if (requestUrl.pathname === "/frame") {
+        if (!cameraBridge.latestFrame) {
+          sendJson(res, 503, {
+            ok: false,
+            status: cameraBridge.status,
+            error: cameraBridge.error || "Camera frame is not ready yet."
+          });
+          return;
+        }
+
+        sendJson(res, 200, {
+          ok: true,
+          data: cameraBridge.latestFrame,
+          updatedAt: cameraBridge.updatedAt
+        });
+        return;
+      }
+
+      sendJson(res, 404, { ok: false, error: "Unknown camera bridge endpoint." });
+    });
+
+    cameraBridge.server.listen(0, "127.0.0.1", () => {
+      const address = cameraBridge.server.address();
+      cameraBridge.url = `http://127.0.0.1:${address.port}/frame?token=${cameraBridge.token}`;
+      resolve();
+    });
+  });
+}
+
 function requestMediaAccess(kind) {
   if (process.platform !== "darwin") return;
 
@@ -171,7 +243,11 @@ function requestMediaAccess(kind) {
   }
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  await startCameraBridge();
+  session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
+    callback(permission === "media");
+  });
   requestMediaAccess("camera");
   requestMediaAccess("microphone");
   createWindow();
@@ -188,6 +264,30 @@ app.on("window-all-closed", () => {
   activeSessions.clear();
 
   if (process.platform !== "darwin") app.quit();
+});
+
+app.on("before-quit", () => {
+  if (cameraBridge.server) {
+    cameraBridge.server.close();
+    cameraBridge.server = null;
+  }
+});
+
+ipcMain.on("camera:frame", (_event, { data }) => {
+  if (typeof data !== "string" || data.length === 0) return;
+  cameraBridge.latestFrame = data;
+  cameraBridge.updatedAt = Date.now();
+  cameraBridge.status = "ready";
+  cameraBridge.error = "";
+});
+
+ipcMain.on("camera:status", (_event, payload = {}) => {
+  cameraBridge.status = payload.status || "unknown";
+  cameraBridge.error = payload.error || "";
+  if (cameraBridge.status !== "ready") {
+    cameraBridge.latestFrame = "";
+    cameraBridge.updatedAt = 0;
+  }
 });
 
 ipcMain.handle("terminal:create", (event, options = {}) => {
@@ -211,6 +311,7 @@ ipcMain.handle("terminal:create", (event, options = {}) => {
       YUKISHELL_ENV_FILE: envFilePath(),
       YUKISHELL_PYTHON_BIN: pythonBinaryPath(),
       YUKISHELL_PYTHONPATH: bundledPythonPath(),
+      YUKISHELL_CAMERA_BRIDGE_URL: cameraBridge.url,
       OPENCV_AVFOUNDATION_SKIP_AUTH: "0",
       PYTHONDONTWRITEBYTECODE: "1",
       PYTHONPATH: [bundledPythonPath(), process.env.PYTHONPATH].filter(Boolean).join(path.delimiter)
@@ -261,6 +362,7 @@ ipcMain.handle("app:paths", () => ({
   pythonBin: pythonBinaryPath(),
   pythonBundleExists: fs.existsSync(bundledPythonPath()),
   envFileExists: fs.existsSync(envFilePath()),
+  cameraBridgeReady: Boolean(cameraBridge.url),
   platform: process.platform,
   arch: process.arch
 }));

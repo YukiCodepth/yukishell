@@ -112,7 +112,55 @@ pasteButton.addEventListener("click", async () => {
   term.focus();
 });
 
+async function startCameraBridge() {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    window.yuki.updateCameraStatus({
+      status: "unavailable",
+      error: "Camera API is not available in this Electron view."
+    });
+    return;
+  }
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+        facingMode: "environment"
+      },
+      audio: false
+    });
+
+    const video = document.createElement("video");
+    video.muted = true;
+    video.playsInline = true;
+    video.srcObject = stream;
+    await video.play();
+
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d", { alpha: false });
+
+    const captureFrame = () => {
+      if (!video.videoWidth || !video.videoHeight) return;
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const image = canvas.toDataURL("image/jpeg", 0.82).replace(/^data:image\/jpeg;base64,/, "");
+      window.yuki.updateCameraFrame(image);
+    };
+
+    captureFrame();
+    window.setInterval(captureFrame, 700);
+  } catch (error) {
+    window.yuki.updateCameraStatus({
+      status: "error",
+      error: error?.message || "Camera permission was denied."
+    });
+  }
+}
+
 requestAnimationFrame(() => {
   fitAndResize();
   startTerminal();
+  startCameraBridge();
 });

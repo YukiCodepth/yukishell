@@ -8,6 +8,9 @@ import base64
 import math
 import tempfile
 import wave
+import json
+import urllib.error
+import urllib.request
 from collections import deque
 from dotenv import load_dotenv
 
@@ -92,6 +95,38 @@ def open_camera(index=0):
     print_permission_help("camera")
     return None, cv2
 
+def camera_bridge_url():
+    return os.environ.get("YUKISHELL_CAMERA_BRIDGE_URL", "").strip()
+
+def fetch_camera_bridge_frame(wait_seconds=8):
+    url = camera_bridge_url()
+    if not url:
+        return None
+
+    deadline = time.time() + wait_seconds
+    last_error = "Camera frame is not ready yet."
+
+    while time.time() < deadline:
+        try:
+            with urllib.request.urlopen(url, timeout=1.5) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+            if payload.get("ok") and payload.get("data"):
+                return payload["data"]
+            last_error = payload.get("error") or last_error
+        except urllib.error.HTTPError as exc:
+            try:
+                payload = json.loads(exc.read().decode("utf-8"))
+                last_error = payload.get("error") or last_error
+            except Exception:
+                last_error = str(exc)
+        except Exception as exc:
+            last_error = str(exc)
+        time.sleep(0.35)
+
+    console.print(f"[bold red]YukiShell camera bridge is not ready:[/bold red] {last_error}")
+    print_permission_help("camera")
+    return None
+
 def detect_serial_port():
     try:
         from serial.tools import list_ports
@@ -160,39 +195,46 @@ def main():
             console.print("\n[bold yellow]🔍 Yuki Datasheet Scanner Initiated.[/bold yellow]")
             console.print("[dim]Hold an IC/Microchip to the camera. Ensure the laser-etched text is well lit.[/dim]")
 
-            cap, cv2 = open_camera(0)
-            if cap is None:
-                sys.exit(1)
+            img_b64 = None
+            if camera_bridge_url():
+                img_b64 = fetch_camera_bridge_frame()
+                if not img_b64:
+                    return
+                console.print("[bold green]📸 Captured frame from YukiShell camera bridge.[/bold green]")
+            if not img_b64:
+                cap, cv2 = open_camera(0)
+                if cap is None:
+                    sys.exit(1)
 
-            frame_to_send = None
-            print("\033[38;2;166;227;161m  -> Press [SPACE] to scan the chip.\033[0m")
-            print("\033[38;2;243;139;168m  -> Press [Q] or [ESC] to cancel.\033[0m\n")
+                frame_to_send = None
+                print("\033[38;2;166;227;161m  -> Press [SPACE] to scan the chip.\033[0m")
+                print("\033[38;2;243;139;168m  -> Press [Q] or [ESC] to cancel.\033[0m\n")
 
-            while True:
-                ret, frame = cap.read()
-                if not ret: break
-                
-                height, width = frame.shape[:2]
-                cx, cy = width // 2, height // 2
-                cv2.rectangle(frame, (cx - 100, cy - 50), (cx + 100, cy + 50), (0, 255, 0), 2)
-                cv2.putText(frame, "ALIGN CHIP TEXT HERE", (cx - 90, cy - 60), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
-
-                cv2.imshow('Yuki Chip Scanner [Press Space]', frame)
-                key = cv2.waitKey(1) & 0xFF
-                if key == 32: 
-                    frame_to_send = frame
-                    console.print("[bold green]📸 Scan complete! Processing silicon topography...[/bold green]")
-                    break
-                elif key == ord('q') or key == 27: 
-                    break
+                while True:
+                    ret, frame = cap.read()
+                    if not ret: break
                     
-            cap.release()
-            cv2.destroyAllWindows()
+                    height, width = frame.shape[:2]
+                    cx, cy = width // 2, height // 2
+                    cv2.rectangle(frame, (cx - 100, cy - 50), (cx + 100, cy + 50), (0, 255, 0), 2)
+                    cv2.putText(frame, "ALIGN CHIP TEXT HERE", (cx - 90, cy - 60), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
 
-            if frame_to_send is None: return
+                    cv2.imshow('Yuki Chip Scanner [Press Space]', frame)
+                    key = cv2.waitKey(1) & 0xFF
+                    if key == 32: 
+                        frame_to_send = frame
+                        console.print("[bold green]📸 Scan complete! Processing silicon topography...[/bold green]")
+                        break
+                    elif key == ord('q') or key == 27: 
+                        break
+                        
+                cap.release()
+                cv2.destroyAllWindows()
 
-            _, buffer = cv2.imencode('.jpg', frame_to_send)
-            img_b64 = base64.b64encode(buffer).decode('utf-8')
+                if frame_to_send is None: return
+
+                _, buffer = cv2.imencode('.jpg', frame_to_send)
+                img_b64 = base64.b64encode(buffer).decode('utf-8')
             
             llm = ChatGoogleGenerativeAI(model=gemini_version, temperature=0.1)
             
@@ -269,6 +311,38 @@ def main():
         # --- V16.0: INTERACTIVE VISUAL TUTOR ---
         elif provider == "live":
             console.print("\n[bold green]🟢 Yuki Visual Tutor Initiated.[/bold green]")
+            if camera_bridge_url():
+                console.print("[dim]Using YukiShell app camera bridge. Ask a visual question, or type q to quit.[/dim]\n")
+                first_frame = fetch_camera_bridge_frame()
+                if not first_frame:
+                    return
+
+                llm = ChatGoogleGenerativeAI(model=gemini_version, temperature=0.6)
+                chat_history = [SystemMessage(content="You are Yuki, an interactive visual tutor. Use the latest camera frame to answer the user's visual question.")]
+
+                try:
+                    while True:
+                        user_input = input("\033[1;36mAman ❯ \033[0m")
+                        if user_input.lower() in ['exit', 'quit', 'q']:
+                            break
+                        if not user_input.strip():
+                            continue
+                        img_b64 = fetch_camera_bridge_frame(wait_seconds=4)
+                        if not img_b64:
+                            continue
+                        user_msg = HumanMessage(content=[
+                            {"type": "text", "text": user_input},
+                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}}
+                        ])
+                        response = llm.invoke(chat_history + [user_msg])
+                        display_ai_response(response.content)
+                        chat_history.extend([user_msg, response])
+                        if len(chat_history) > 7:
+                            chat_history = [chat_history[0]] + chat_history[-6:]
+                except KeyboardInterrupt:
+                    pass
+                return
+
             cap, cv2 = open_camera(0)
             if cap is None:
                 sys.exit(1)
