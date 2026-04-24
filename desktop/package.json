@@ -16,6 +16,7 @@
     "dist": "npm run build:assets && npm run build:core && npm run build:python && npm run prepare:resources && electron-builder",
     "dist:linux": "npm run build:assets && npm run build:core && npm run build:python && npm run prepare:resources && electron-builder --linux",
     "dist:linux:deb": "npm run build:assets && npm run build:core && npm run build:python && npm run prepare:resources && electron-builder --linux deb",
+    "dist:linux:tar": "npm run build:assets && npm run build:core && npm run build:python && npm run prepare:resources && electron-builder --linux tar.gz",
     "dist:mac": "npm run build:assets && npm run build:core && npm run build:python && npm run prepare:resources && electron-builder --mac",
     "dist:win": "npm run build:assets && npm run build:python && npm run prepare:resources && electron-builder --win"
   },

@@ -16,7 +16,7 @@ npm run dev
 
 ```bash
 npm run dist:mac
-npm run dist:linux
+npm run dist:linux:tar
 npm run dist:win
 ```
 

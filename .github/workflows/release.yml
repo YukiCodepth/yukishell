@@ -27,10 +27,10 @@ jobs:
               desktop/release/mac-*/YukiShell.app
           - name: Linux x64
             os: ubuntu-latest
-            npm_script: dist:linux:deb
+            npm_script: dist:linux:tar
             artifact: yuki-linux
             paths: |
-              desktop/release/*.deb
+              desktop/release/*.tar.gz
           - name: Windows x64
             os: windows-latest
             npm_script: dist:win

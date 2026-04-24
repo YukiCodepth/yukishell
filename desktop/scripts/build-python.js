@@ -40,7 +40,7 @@ function hasImports(python, stdio = "ignore") {
     "for m in mods:",
     "    __import__(m)",
     "    print(m, 'ok')",
-    "native_optional=['cv2','sounddevice']",
+    "native_optional=['sounddevice']",
     "for m in native_optional:",
     "    if importlib.util.find_spec(m) is None:",
     "        raise SystemExit(f'{m} missing')",
