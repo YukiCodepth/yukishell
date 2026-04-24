@@ -103,28 +103,18 @@ jobs:
           path: release-artifacts
           merge-multiple: true
 
+      - name: List release files
+        run: find release-artifacts -maxdepth 2 -type f -print
+
       - name: Attach artifacts to release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG_NAME: ${{ github.ref_name }}
-        run: |
-          set -euo pipefail
-          find release-artifacts -type f \( -name '*.dmg' -o -name '*.zip' -o -name '*.tar.gz' -o -name '*.exe' \) -print > release-files.txt
-          if [ ! -s release-files.txt ]; then
-            echo "::error::No desktop release assets were downloaded."
-            exit 1
-          fi
-
-          for attempt in 1 2 3; do
-            gh release view "$TAG_NAME" >/dev/null 2>&1 || gh release create "$TAG_NAME" --title "$TAG_NAME" --generate-notes
-            failed=0
-            while IFS= read -r file; do
-              gh release upload "$TAG_NAME" "$file" --clobber || failed=1
-            done < release-files.txt
-            if [ "$failed" -eq 0 ]; then
-              exit 0
-            fi
-            sleep $((attempt * 15))
-          done
-
-          exit 1
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: YukiShell Desktop ${{ github.ref_name }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            release-artifacts/*.dmg
+            release-artifacts/*.zip
+            release-artifacts/*.tar.gz
+            release-artifacts/*.exe
