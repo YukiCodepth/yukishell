@@ -121,26 +121,10 @@ def print_permission_help(kind):
     else:
         console.print(f"[bold red]Could not access the {kind}. Check device permissions and drivers.[/bold red]")
 
-def allow_direct_opencv_camera():
-    return os.environ.get("YUKISHELL_ALLOW_OPENCV_CAMERA", "").strip() == "1"
-
-def print_desktop_camera_help():
-    if sys.platform == "darwin":
-        console.print("[bold red]Camera mode needs the YukiShell desktop camera bridge on macOS.[/bold red]")
-        console.print("[dim]Open YukiShell.app and run ask --live or ask --chip there. If macOS asks, allow Camera access for YukiShell.[/dim]")
-        console.print("[dim]Direct CLI OpenCV camera is disabled on macOS because AVFoundation often fails permission prompts from terminal child processes.[/dim]")
-    else:
-        console.print("[bold red]Camera bridge is not active.[/bold red]")
-        console.print("[dim]Run this inside the YukiShell desktop app, or install/configure OpenCV camera support for direct CLI use.[/dim]")
-
 def open_camera(index=0):
     os.environ.setdefault("OPENCV_AVFOUNDATION_SKIP_AUTH", "0")
     os.environ.setdefault("QT_LOGGING_RULES", "*=false")
     os.environ.setdefault("OPENCV_LOG_LEVEL", "FATAL")
-
-    if sys.platform == "darwin" and not allow_direct_opencv_camera():
-        print_desktop_camera_help()
-        return None, None
 
     try:
         import cv2
