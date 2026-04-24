@@ -109,15 +109,19 @@ jobs:
           TAG_NAME: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          mapfile -d '' files < <(find release-artifacts -type f \( -name '*.dmg' -o -name '*.zip' -o -name '*.tar.gz' -o -name '*.exe' \) -print0)
-          if [ "${#files[@]}" -eq 0 ]; then
+          find release-artifacts -type f \( -name '*.dmg' -o -name '*.zip' -o -name '*.tar.gz' -o -name '*.exe' \) -print > release-files.txt
+          if [ ! -s release-files.txt ]; then
             echo "::error::No desktop release assets were downloaded."
             exit 1
           fi
 
           for attempt in 1 2 3; do
             gh release view "$TAG_NAME" >/dev/null 2>&1 || gh release create "$TAG_NAME" --title "$TAG_NAME" --generate-notes
-            if gh release upload "$TAG_NAME" "${files[@]}" --clobber; then
+            failed=0
+            while IFS= read -r file; do
+              gh release upload "$TAG_NAME" "$file" --clobber || failed=1
+            done < release-files.txt
+            if [ "$failed" -eq 0 ]; then
               exit 0
             fi
             sleep $((attempt * 15))
